@@ -1,0 +1,145 @@
+{
+  "deterministic_rules": [
+    {
+      "id": 1,
+      "text": "Seller name is required",
+      "rule_type": "required_field",
+      "field": "seller_name",
+      "operation": "not_empty",
+      "message": "Seller name is missing",
+      "test_expectations": {
+        "valid": "PASS",
+        "invalid_tax": "PASS",
+        "future_date": "PASS",
+        "missing_seller": "FAIL",
+        "broken_xml": "ERROR"
+      }
+    },
+    {
+      "id": 2,
+      "text": "Buyer name is required",
+      "rule_type": "required_field",
+      "field": "buyer_name",
+      "operation": "not_empty",
+      "message": "Buyer name is missing",
+      "test_expectations": {
+        "valid": "PASS",
+        "invalid_tax": "PASS",
+        "future_date": "PASS",
+        "missing_seller": "PASS",
+        "broken_xml": "ERROR"
+      }
+    },
+    {
+      "id": 3,
+      "text": "Invoice ID is required",
+      "rule_type": "required_field",
+      "field": "invoice_id",
+      "operation": "not_empty",
+      "message": "Invoice ID is missing",
+      "test_expectations": {
+        "valid": "PASS",
+        "invalid_tax": "PASS",
+        "future_date": "PASS",
+        "missing_seller": "PASS",
+        "broken_xml": "ERROR"
+      }
+    },
+    {
+      "id": 4,
+      "text": "Tax amount must be exactly 18% of taxable amount",
+      "rule_type": "amount_calculation",
+      "field": "tax_amount",
+      "operation": "percentage",
+      "base_field": "taxable_amount",
+      "value": 18,
+      "message": "Tax amount mismatch",
+      "test_expectations": {
+        "valid": "PASS",
+        "invalid_tax": "FAIL",
+        "future_date": "PASS",
+        "missing_seller": "PASS",
+        "broken_xml": "ERROR"
+      }
+    },
+    {
+      "id": 5,
+      "text": "Currency code must be INR",
+      "rule_type": "currency_consistency",
+      "field": "currency_code",
+      "operation": "in",
+      "value": ["INR"],
+      "message": "Currency must be INR",
+      "test_expectations": {
+        "valid": "PASS",
+        "invalid_tax": "PASS",
+        "future_date": "PASS",
+        "missing_seller": "PASS",
+        "broken_xml": "ERROR"
+      }
+    },
+    {
+      "id": 6,
+      "text": "Issue date cannot be in the future",
+      "rule_type": "date_validation",
+      "field": "issue_date",
+      "operation": "not_future",
+      "message": "Issue date cannot be in the future",
+      "test_expectations": {
+        "valid": "PASS",
+        "invalid_tax": "PASS",
+        "future_date": "FAIL",
+        "missing_seller": "PASS",
+        "broken_xml": "ERROR"
+      }
+    },
+    {
+      "id": 7,
+      "text": "Payable amount must be greater than 0",
+      "rule_type": "numeric_comparison",
+      "field": "payable_amount",
+      "operation": "gt",
+      "value": 0,
+      "message": "Payable amount must be positive",
+      "test_expectations": {
+        "valid": "PASS",
+        "invalid_tax": "PASS",
+        "future_date": "PASS",
+        "missing_seller": "PASS",
+        "broken_xml": "ERROR"
+      }
+    }
+  ],
+  "test_matrix": {
+    "invoice_0026_valid.xml": {
+      "description": "Valid invoice with correct data",
+      "expected_outcome": "ALL_PASS"
+    },
+    "invoice_0026_invalid_tax.xml": {
+      "description": "Tax amount is 1500 instead of 18% of taxable",
+      "expected_outcome": "FAIL_ON_RULE_4_ONLY"
+    },
+    "invoice_0026_future_date.xml": {
+      "description": "Issue date is 2027-12-01 (future)",
+      "expected_outcome": "FAIL_ON_RULE_6_ONLY"
+    },
+    "invoice_0026_missing_seller.xml": {
+      "description": "Seller name field removed",
+      "expected_outcome": "FAIL_ON_RULE_1_ONLY"
+    },
+    "invoice_0026_broken.xml": {
+      "description": "Malformed XML (missing closing tag)",
+      "expected_outcome": "XML_PARSE_ERROR"
+    }
+  },
+  "deterministic_requirements": [
+    "Same invoice → Same result (rerun test)",
+    "Mutated invoice → Expected failure only",
+    "No random outputs",
+    "No timing-dependent behavior",
+    "No external state leakage",
+    "Float comparisons use tolerance (±0.02)",
+    "Date comparisons use current_date param",
+    "All LLM output is deterministic (temp=0)"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "rule_type": "required_field",
+  "field": "buyer_name",
+  "operation": "not_empty",
+  "message": "Buyer name is missing",
+  "_provider": "groq",
+  "rule_text": "Buyer name is required"
+}

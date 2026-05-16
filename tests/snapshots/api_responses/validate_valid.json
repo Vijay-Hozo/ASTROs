@@ -1,0 +1,123 @@
+{
+  "invoice_id": "INV-0026",
+  "summary": {
+    "total": 14,
+    "passed": 14,
+    "failed": 0,
+    "errors": 0
+  },
+  "results": [
+    {
+      "rule_id": 1,
+      "rule_text": "Seller name is required",
+      "rule_type": "required_field",
+      "status": "PASS",
+      "message": "seller_name is present",
+      "field": "seller_name"
+    },
+    {
+      "rule_id": 2,
+      "rule_text": "Buyer name is required",
+      "rule_type": "required_field",
+      "status": "PASS",
+      "message": "buyer_name is present",
+      "field": "buyer_name"
+    },
+    {
+      "rule_id": 3,
+      "rule_text": "Invoice ID is required",
+      "rule_type": "required_field",
+      "status": "PASS",
+      "message": "invoice_id is present",
+      "field": "invoice_id"
+    },
+    {
+      "rule_id": 4,
+      "rule_text": "Tax amount must be exactly 18% of taxable amount",
+      "rule_type": "amount_calculation",
+      "status": "PASS",
+      "message": "tax_amount correctly calculated as 18.0% of taxable_amount",
+      "field": "tax_amount"
+    },
+    {
+      "rule_id": 5,
+      "rule_text": "Currency code must be INR",
+      "rule_type": "currency_consistency",
+      "status": "PASS",
+      "message": "Currency is valid",
+      "field": "currency_code"
+    },
+    {
+      "rule_id": 6,
+      "rule_text": "Issue date cannot be in the future",
+      "rule_type": "date_validation",
+      "status": "PASS",
+      "message": "issue_date is not in the future",
+      "field": "issue_date"
+    },
+    {
+      "rule_id": 7,
+      "rule_text": "Payable amount must be greater than 0",
+      "rule_type": "numeric_comparison",
+      "status": "PASS",
+      "message": "payable_amount passes numeric check",
+      "field": "payable_amount"
+    },
+    {
+      "rule_id": 8,
+      "rule_text": "Seller name is required",
+      "rule_type": "required_field",
+      "status": "PASS",
+      "message": "seller_name is present",
+      "field": "seller_name"
+    },
+    {
+      "rule_id": 9,
+      "rule_text": "Buyer name is required",
+      "rule_type": "required_field",
+      "status": "PASS",
+      "message": "buyer_name is present",
+      "field": "buyer_name"
+    },
+    {
+      "rule_id": 10,
+      "rule_text": "Invoice ID is required",
+      "rule_type": "required_field",
+      "status": "PASS",
+      "message": "invoice_id is present",
+      "field": "invoice_id"
+    },
+    {
+      "rule_id": 11,
+      "rule_text": "Tax amount must be exactly 18% of taxable amount",
+      "rule_type": "amount_calculation",
+      "status": "PASS",
+      "message": "tax_amount correctly calculated as 18.0% of taxable_amount",
+      "field": "tax_amount"
+    },
+    {
+      "rule_id": 12,
+      "rule_text": "Currency code must be INR",
+      "rule_type": "currency_consistency",
+      "status": "PASS",
+      "message": "Currency is valid",
+      "field": "currency_code"
+    },
+    {
+      "rule_id": 13,
+      "rule_text": "Issue date cannot be in the future",
+      "rule_type": "date_validation",
+      "status": "PASS",
+      "message": "issue_date is not in the future",
+      "field": "issue_date"
+    },
+    {
+      "rule_id": 14,
+      "rule_text": "Payable amount must be greater than 0",
+      "rule_type": "numeric_comparison",
+      "status": "PASS",
+      "message": "payable_amount passes numeric check",
+      "field": "payable_amount"
+    }
+  ]
+}

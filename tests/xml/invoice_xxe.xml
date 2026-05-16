@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<Invoice>
+  <invoice_id>&xxe;</invoice_id>
+  <issue_date>2026-05-15</issue_date>
+</Invoice>

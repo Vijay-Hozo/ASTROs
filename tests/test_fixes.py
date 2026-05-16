@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+
 """
 test_fixes.py — Regression tests for Phase 1-8 fixes.
 Tests all critical security and stability improvements.

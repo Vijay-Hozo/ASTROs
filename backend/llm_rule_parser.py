@@ -74,7 +74,27 @@ Respond ONLY with valid JSON. Nothing else."""
 
 def _clean_json(raw: str) -> dict:
     raw = re.sub(r"```(?:json)?", "", raw).strip("` \n")
-    return json.loads(raw)
+    parsed = json.loads(raw)
+    
+    # Hallucination protection / Strict Schema Validation
+    allowed_fields = {
+        "tax_amount", "taxable_amount", "payable_amount", "invoice_id", 
+        "seller_name", "buyer_name", "issue_date", "currency_code", 
+        "tax_category", "tax_exemption_reason", "buyer_vat"
+    }
+    allowed_rules = {
+        "required_field", "amount_calculation", "date_validation", 
+        "numeric_comparison", "currency_consistency", "tax_category_validation", 
+        "conditional_required_field", "duplicate_field_check"
+    }
+    
+    if "rule_type" not in parsed or parsed["rule_type"] not in allowed_rules:
+        raise ValueError(f"Invalid or missing rule_type: {parsed.get('rule_type')}")
+        
+    if "field" not in parsed or parsed["field"] not in allowed_fields:
+        raise ValueError(f"Invalid or hallucinated field: {parsed.get('field')}")
+        
+    return parsed
 
 
 def _call_groq(rule_text: str) -> dict:

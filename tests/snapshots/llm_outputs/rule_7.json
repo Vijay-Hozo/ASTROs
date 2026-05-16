@@ -1,0 +1,9 @@
+{
+  "rule_type": "numeric_comparison",
+  "field": "payable_amount",
+  "operation": "gt",
+  "value": 0,
+  "message": "Payable amount must be greater than 0",
+  "_provider": "groq",
+  "rule_text": "Payable amount must be greater than 0"
+}
