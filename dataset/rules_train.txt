@@ -1,0 +1,600 @@
+rule_id: R014
+rule_text: seller name is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: seller name is required
+
+rule_id: R013
+rule_text: invoice ID is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: invoice id is required
+
+rule_id: R016
+rule_text: issue date is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: issue date is required
+
+rule_id: R010
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R026
+rule_text: Invoice must contain a payable amount
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a payable amount
+
+rule_id: R040
+rule_text: Tax category must be S, Z, E, or AE
+severity: error
+rule_type: tax_category_validation
+expected_error_message: Validation failed: tax category must be s, z, e, or ae
+
+rule_id: R002
+rule_text: Tax amount must be exactly 9% of taxable amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 9% of taxable amount
+
+rule_id: R001
+rule_text: Tax amount must be exactly 5% of taxable amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 5% of taxable amount
+
+rule_id: R017
+rule_text: currency code is required
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: currency code is required
+
+rule_id: R004
+rule_text: Tax amount must be exactly 18% of taxable amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 18% of taxable amount
+
+rule_id: R027
+rule_text: Issue date cannot be in the future
+severity: error
+rule_type: date_validation
+expected_error_message: Validation failed: issue date cannot be in the future
+
+rule_id: R034
+rule_text: Payable amount must not be negative
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must not be negative
+
+rule_id: R032
+rule_text: Taxable amount must not be negative
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: taxable amount must not be negative
+
+rule_id: R043
+rule_text: Invoice ID must be unique
+severity: error
+rule_type: duplicate_field_check
+expected_error_message: Validation failed: invoice id must be unique
+
+rule_id: R029
+rule_text: Taxable amount must be greater than zero
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: taxable amount must be greater than zero
+
+rule_id: R038
+rule_text: Currency code must be one of USD, EUR, GBP, INR, or AED
+severity: error
+rule_type: currency_consistency
+expected_error_message: Validation failed: currency code must be one of usd, eur, gbp, inr, or aed
+
+rule_id: R036
+rule_text: Tax amount must be less than 1000000
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must be less than 1000000
+
+rule_id: R008
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R035
+rule_text: Taxable amount must be less than 1000000
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: taxable amount must be less than 1000000
+
+rule_id: R039
+rule_text: All line items must use the same currency as the invoice
+severity: warning
+rule_type: currency_consistency
+expected_error_message: Validation failed: all line items must use the same currency as the invoice
+
+rule_id: R033
+rule_text: Tax amount must not be negative
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must not be negative
+
+rule_id: R020
+rule_text: Invoice must contain a invoice ID
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a invoice id
+
+rule_id: R042
+rule_text: If tax category is AE, buyer VAT number is required
+severity: warning
+rule_type: conditional_required_field
+expected_error_message: Validation failed: if tax category is ae, buyer vat number is required
+
+rule_id: R021
+rule_text: Invoice must contain a seller name
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a seller name
+
+rule_id: R028
+rule_text: Issue date must be a valid calendar date
+severity: warning
+rule_type: date_validation
+expected_error_message: Validation failed: issue date must be a valid calendar date
+
+rule_id: R023
+rule_text: Invoice must contain a issue date
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a issue date
+
+rule_id: R009
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: warning
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R022
+rule_text: Invoice must contain a buyer name
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a buyer name
+
+rule_id: R037
+rule_text: Payable amount must be less than 1000000
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must be less than 1000000
+
+rule_id: R031
+rule_text: Payable amount must be greater than zero
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must be greater than zero
+
+rule_id: R012
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R011
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R024
+rule_text: Invoice must contain a currency code
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a currency code
+
+rule_id: R030
+rule_text: Tax amount must be greater than zero
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must be greater than zero
+
+rule_id: R018
+rule_text: tax amount is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: tax amount is required
+
+rule_id: R025
+rule_text: Invoice must contain a tax amount
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a tax amount
+
+rule_id: R007
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R041
+rule_text: If tax category is E, tax exemption reason is required
+severity: warning
+rule_type: conditional_required_field
+expected_error_message: Validation failed: if tax category is e, tax exemption reason is required
+
+rule_id: R006
+rule_text: Tax amount must be exactly 28% of taxable amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 28% of taxable amount
+
+rule_id: R019
+rule_text: payable amount is required
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: payable amount is required
+
+rule_id: R015
+rule_text: buyer name is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: buyer name is required
+
+rule_id: R003
+rule_text: Tax amount must be exactly 12% of taxable amount
+severity: warning
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 12% of taxable amount
+
+rule_id: R005
+rule_text: Tax amount must be exactly 20% of taxable amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 20% of taxable amount
+
+rule_id: R243
+rule_text: Invoice ID must be unique
+severity: error
+rule_type: duplicate_field_check
+expected_error_message: Validation failed: invoice id must be unique
+
+rule_id: R244
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R245
+rule_text: Tax amount must not be negative
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must not be negative
+
+rule_id: R246
+rule_text: Invoice ID must be unique
+severity: error
+rule_type: duplicate_field_check
+expected_error_message: Validation failed: invoice id must be unique
+
+rule_id: R247
+rule_text: Tax amount must be exactly 12% of taxable amount
+severity: warning
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 12% of taxable amount
+
+rule_id: R248
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R249
+rule_text: Invoice must contain a issue date
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a issue date
+
+rule_id: R250
+rule_text: Tax amount must be exactly 12% of taxable amount
+severity: warning
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 12% of taxable amount
+
+rule_id: R251
+rule_text: Payable amount must be greater than zero
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must be greater than zero
+
+rule_id: R252
+rule_text: Tax amount must be exactly 18% of taxable amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 18% of taxable amount
+
+rule_id: R253
+rule_text: Tax amount must be less than 1000000
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must be less than 1000000
+
+rule_id: R254
+rule_text: currency code is required
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: currency code is required
+
+rule_id: R255
+rule_text: Currency code must be one of USD, EUR, GBP, INR, or AED
+severity: error
+rule_type: currency_consistency
+expected_error_message: Validation failed: currency code must be one of usd, eur, gbp, inr, or aed
+
+rule_id: R256
+rule_text: Tax amount must be exactly 12% of taxable amount
+severity: warning
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 12% of taxable amount
+
+rule_id: R257
+rule_text: Invoice must contain a tax amount
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a tax amount
+
+rule_id: R258
+rule_text: tax amount is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: tax amount is required
+
+rule_id: R259
+rule_text: Tax amount must be less than 1000000
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must be less than 1000000
+
+rule_id: R260
+rule_text: Tax amount must be exactly 12% of taxable amount
+severity: warning
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 12% of taxable amount
+
+rule_id: R261
+rule_text: If tax category is E, tax exemption reason is required
+severity: warning
+rule_type: conditional_required_field
+expected_error_message: Validation failed: if tax category is e, tax exemption reason is required
+
+rule_id: R262
+rule_text: Invoice must contain a buyer name
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a buyer name
+
+rule_id: R263
+rule_text: Invoice must contain a tax amount
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a tax amount
+
+rule_id: R264
+rule_text: Payable amount must be greater than zero
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must be greater than zero
+
+rule_id: R265
+rule_text: Invoice ID must be unique
+severity: error
+rule_type: duplicate_field_check
+expected_error_message: Validation failed: invoice id must be unique
+
+rule_id: R266
+rule_text: Payable amount must be less than 1000000
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must be less than 1000000
+
+rule_id: R267
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R268
+rule_text: Invoice ID must be unique
+severity: error
+rule_type: duplicate_field_check
+expected_error_message: Validation failed: invoice id must be unique
+
+rule_id: R269
+rule_text: Invoice must contain a tax amount
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a tax amount
+
+rule_id: R270
+rule_text: Payable amount must not be negative
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must not be negative
+
+rule_id: R271
+rule_text: Tax amount must be exactly 9% of taxable amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: tax amount must be exactly 9% of taxable amount
+
+rule_id: R272
+rule_text: Taxable amount must be greater than zero
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: taxable amount must be greater than zero
+
+rule_id: R273
+rule_text: All line items must use the same currency as the invoice
+severity: warning
+rule_type: currency_consistency
+expected_error_message: Validation failed: all line items must use the same currency as the invoice
+
+rule_id: R274
+rule_text: Tax amount must not be negative
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must not be negative
+
+rule_id: R275
+rule_text: currency code is required
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: currency code is required
+
+rule_id: R276
+rule_text: currency code is required
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: currency code is required
+
+rule_id: R277
+rule_text: Invoice must contain a issue date
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a issue date
+
+rule_id: R278
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R279
+rule_text: currency code is required
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: currency code is required
+
+rule_id: R280
+rule_text: Tax amount must be less than 1000000
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must be less than 1000000
+
+rule_id: R281
+rule_text: Payable amount must equal taxable amount plus tax amount
+severity: error
+rule_type: amount_calculation
+expected_error_message: Validation failed: payable amount must equal taxable amount plus tax amount
+
+rule_id: R282
+rule_text: Invoice must contain a currency code
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a currency code
+
+rule_id: R283
+rule_text: Payable amount must not be negative
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must not be negative
+
+rule_id: R284
+rule_text: invoice ID is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: invoice id is required
+
+rule_id: R285
+rule_text: Taxable amount must be greater than zero
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: taxable amount must be greater than zero
+
+rule_id: R286
+rule_text: Invoice ID must be unique
+severity: error
+rule_type: duplicate_field_check
+expected_error_message: Validation failed: invoice id must be unique
+
+rule_id: R287
+rule_text: tax amount is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: tax amount is required
+
+rule_id: R288
+rule_text: Invoice must contain a currency code
+severity: warning
+rule_type: required_field
+expected_error_message: Validation failed: invoice must contain a currency code
+
+rule_id: R289
+rule_text: Invoice ID must be unique
+severity: error
+rule_type: duplicate_field_check
+expected_error_message: Validation failed: invoice id must be unique
+
+rule_id: R290
+rule_text: Taxable amount must be greater than zero
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: taxable amount must be greater than zero
+
+rule_id: R291
+rule_text: If tax category is E, tax exemption reason is required
+severity: warning
+rule_type: conditional_required_field
+expected_error_message: Validation failed: if tax category is e, tax exemption reason is required
+
+rule_id: R292
+rule_text: Currency code must be one of USD, EUR, GBP, INR, or AED
+severity: error
+rule_type: currency_consistency
+expected_error_message: Validation failed: currency code must be one of usd, eur, gbp, inr, or aed
+
+rule_id: R293
+rule_text: Tax amount must not be negative
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must not be negative
+
+rule_id: R294
+rule_text: tax amount is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: tax amount is required
+
+rule_id: R295
+rule_text: seller name is required
+severity: error
+rule_type: required_field
+expected_error_message: Validation failed: seller name is required
+
+rule_id: R296
+rule_text: Currency code must be one of USD, EUR, GBP, INR, or AED
+severity: error
+rule_type: currency_consistency
+expected_error_message: Validation failed: currency code must be one of usd, eur, gbp, inr, or aed
+
+rule_id: R297
+rule_text: Currency code must be one of USD, EUR, GBP, INR, or AED
+severity: error
+rule_type: currency_consistency
+expected_error_message: Validation failed: currency code must be one of usd, eur, gbp, inr, or aed
+
+rule_id: R298
+rule_text: Tax amount must be greater than zero
+severity: error
+rule_type: numeric_comparison
+expected_error_message: Validation failed: tax amount must be greater than zero
+
+rule_id: R299
+rule_text: Payable amount must be greater than zero
+severity: warning
+rule_type: numeric_comparison
+expected_error_message: Validation failed: payable amount must be greater than zero
+

@@ -1,0 +1,37 @@
+<Invoice>
+  <invoice_id/>
+  <issue_date>2026-04-19</issue_date>
+  <seller_name>Seller_3</seller_name>
+  <buyer_name>Buyer_27</buyer_name>
+  <currency_code>AED</currency_code>
+  <taxable_amount>40963.38</taxable_amount>
+  <tax_amount>11469.75</tax_amount>
+  <payable_amount>52433.13</payable_amount>
+  <tax_category>S</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>2</quantity>
+      <unit_price>2305.14</unit_price>
+      <line_total>4610.28</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>8</quantity>
+      <unit_price>2379.2</unit_price>
+      <line_total>19033.6</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>4</quantity>
+      <unit_price>761.42</unit_price>
+      <line_total>3045.68</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>10</quantity>
+      <unit_price>1327.36</unit_price>
+      <line_total>13273.6</line_total>
+    </item>
+  </line_items>
+</Invoice>
