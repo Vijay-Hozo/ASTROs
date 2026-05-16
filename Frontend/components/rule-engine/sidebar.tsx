@@ -39,7 +39,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-gradient-to-b from-[#031643] via-[#04153a] to-[#04112f] text-white shadow-[0_30px_80px_rgba(3,12,31,0.45)]">
-      <div className="border-b border-white/10 px-5 pb-6 pt-5">
+      <div className="px-5 pt-5 pb-6 border-b border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#4c63ff] to-[#5b2ef1] text-white shadow-[0_0_24px_rgba(76,99,255,0.45)]">
@@ -52,7 +52,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           </div>
           {onClose && (
             <button
-              className="rounded-md p-2 transition hover:bg-white/10 lg:hidden"
+              className="lg:hidden p-2 rounded-md hover:bg-white/10 transition"
               onClick={onClose}
               aria-label="Close sidebar"
             >
@@ -62,7 +62,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 py-5">
+      <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
         {navItems.map(({ label, icon: Icon, href }) => {
           const active = href ? pathname === href || pathname.startsWith(`${href}/`) : false;
 
@@ -99,8 +99,8 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
       <div className="p-4">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
-          <div className="mb-3 text-xs text-white/70">System Status</div>
-          <div className="mb-2 flex items-center gap-2">
+          <div className="text-xs text-white/70 mb-3">System Status</div>
+          <div className="flex items-center gap-2 mb-2">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
             <span className="text-sm">All systems operational</span>
           </div>
@@ -113,7 +113,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
 export function DesktopSidebar() {
   return (
-    <aside className="fixed left-0 top-0 z-30 hidden h-screen w-[280px] border-r border-white/5 lg:block">
+    <aside className="hidden lg:block fixed left-0 top-0 h-screen w-[280px] z-30 border-r border-white/5">
       <SidebarContent />
     </aside>
   );
@@ -124,7 +124,7 @@ export function MobileSidebar({ mobileOpen, onClose }: SidebarProps) {
     <>
       {mobileOpen && (
         <button
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          className="lg:hidden fixed inset-0 bg-black/40 z-40"
           onClick={onClose}
           aria-label="Close sidebar overlay"
         />
@@ -133,7 +133,7 @@ export function MobileSidebar({ mobileOpen, onClose }: SidebarProps) {
         initial={{ x: -300 }}
         animate={{ x: mobileOpen ? 0 : -300 }}
         transition={{ type: "spring", stiffness: 260, damping: 25 }}
-        className="fixed left-0 top-0 z-50 h-screen w-[280px] lg:hidden"
+        className="lg:hidden fixed left-0 top-0 h-screen w-[280px] z-50"
       >
         <SidebarContent onClose={onClose} />
       </motion.aside>

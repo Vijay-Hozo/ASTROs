@@ -81,11 +81,11 @@ export default function ValidationTable() {
 
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h3 className="font-semibold text-[#07122F]">4. Validation Results (Preview)</h3>
         <div className="flex items-center gap-2">
           <label className="relative">
-            <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white" />
             <input
               value={query}
               onChange={(e) => {
@@ -115,17 +115,17 @@ export default function ValidationTable() {
         <table className="min-w-[900px] w-full text-sm">
           <thead className="bg-slate-50 text-slate-500">
             <tr>
-              <th className="text-left px-3 py-2">Rule ID</th>
-              <th className="text-left px-3 py-2">Rule</th>
-              <th className="text-left px-3 py-2">Severity</th>
-              <th className="text-left px-3 py-2">Status</th>
-              <th className="text-left px-3 py-2">Message</th>
+              <th className="px-3 py-2 text-left">Rule ID</th>
+              <th className="px-3 py-2 text-left">Rule</th>
+              <th className="px-3 py-2 text-left">Severity</th>
+              <th className="px-3 py-2 text-left">Status</th>
+              <th className="px-3 py-2 text-left">Message</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody>
             {pageRows.map((row) => (
-              <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50/80 transition">
+              <tr key={row.id} className="border-t border-slate-100 transition hover:bg-slate-50/80">
                 <td className="px-3 py-2 font-medium text-slate-700">{row.id}</td>
                 <td className="px-3 py-2 text-slate-600">{row.rule}</td>
                 <td className="px-3 py-2">
@@ -154,7 +154,7 @@ export default function ValidationTable() {
                 </td>
                 <td className="px-3 py-2 text-slate-600">{row.message}</td>
                 <td className="px-3 py-2 text-right text-slate-400">
-                  <ChevronDown className="h-4 w-4 inline" />
+                  <ChevronDown className="inline h-4 w-4" />
                 </td>
               </tr>
             ))}
@@ -169,7 +169,7 @@ export default function ValidationTable() {
         </table>
       </div>
 
-      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button className="text-sm text-[#432EF1] hover:text-[#3223bd]">View All Violations (26)</button>
         <div className="flex items-center gap-2 text-sm">
           <button

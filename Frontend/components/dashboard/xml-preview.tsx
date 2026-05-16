@@ -15,12 +15,12 @@ const xmlLines = [
 export default function XmlPreview() {
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-      <h3 className="font-semibold text-[#07122F] mb-3">Invoice XML Preview</h3>
-      <div className="rounded-xl border border-slate-200 bg-[#0f172a] p-3 overflow-auto">
-        <code className="block text-xs text-slate-200 leading-6 min-w-[320px]">
+      <h3 className="mb-3 font-semibold text-[#07122F]">Invoice XML Preview</h3>
+      <div className="overflow-auto rounded-xl border border-slate-200 bg-[#0f172a] p-3">
+        <code className="block min-w-[320px] text-xs leading-6 text-slate-200">
           {xmlLines.map((line, idx) => (
             <div key={idx} className="grid grid-cols-[2rem_1fr] gap-3">
-              <span className="text-slate-500 text-right">{idx + 1}</span>
+              <span className="text-right text-slate-500">{idx + 1}</span>
               <span className="whitespace-pre">{line}</span>
             </div>
           ))}
