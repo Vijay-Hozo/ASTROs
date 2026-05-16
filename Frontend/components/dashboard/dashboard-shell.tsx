@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { motion } from "framer-motion";
@@ -192,7 +193,7 @@ export default function DashboardShell() {
                   <ParsedRuleCard result={validationResult} />
                   <ValidationLogicCard />
                 </div>
-                <ValidationTable />
+                {/* <ValidationTable /> */}
               </div>
 
               <div className="space-y-6 xl:col-span-4">
