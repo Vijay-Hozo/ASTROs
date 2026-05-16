@@ -377,3 +377,31 @@ if __name__ == "__main__":
     print(f"\n{'='*60}")
     print(f"Result: {passed}/{len(test_sentences)} rules parsed successfully")
     print(f"{'='*60}")
+
+
+# ─── Class wrapper for evaluator integration ──────────────────────────────────
+
+class RuleParser:
+    """Class-based wrapper for rule parsing to support evaluator.py integration."""
+    
+    def parse(self, rule_text: str) -> dict:
+        """Parse a natural language rule into structured JSON.
+        
+        Args:
+            rule_text: Natural language rule description
+            
+        Returns:
+            Dictionary with rule_type, field, operation, and other metadata
+        """
+        return parse_rule(rule_text)
+    
+    def parse_file(self, path: str) -> list[dict]:
+        """Parse all rules from a rules file.
+        
+        Args:
+            path: Path to rules_train.txt or rules_test.txt
+            
+        Returns:
+            List of parsed rule dictionaries
+        """
+        return parse_rules_file(path)
