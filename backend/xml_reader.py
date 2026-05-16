@@ -19,6 +19,8 @@ def parse_invoice_xml(source: str) -> dict:
     Returns a clean dict with all invoice fields.
     Missing fields return None — executor handles None safely.
     """
+    # Parse XML first
+    root = None
     try:
         # Detect if input is XML content or file path
         source_str = source.strip()
@@ -38,6 +40,10 @@ def parse_invoice_xml(source: str) -> dict:
         return {"_parse_error": f"Invalid XML content: {str(e)[:100]}"}
     except Exception as e:
         return {"_parse_error": f"XML processing error: {str(e)[:100]}"}
+
+    # If parsing failed, root will be None
+    if root is None:
+        return {"_parse_error": "Failed to parse XML: root element is None"}
 
     def get(tag: str) -> Optional[str]:
         """Safe tag getter with namespace support."""
@@ -80,7 +86,7 @@ def parse_invoice_xml(source: str) -> dict:
 
     # ── Line items ────────────────────────────────────────────────────────────
     line_items = []
-    line_items_el = root.find("line_items")
+    line_items_el = root.find("line_items") if root is not None else None
     if line_items_el is not None:
         for item in line_items_el.findall("item"):
             def item_get(tag):

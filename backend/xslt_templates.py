@@ -7,7 +7,7 @@ def build_xslt(structured_rule: dict) -> str:
     """
     Takes a structured rule dict from LLM and returns a complete XSLT string.
     """
-    rule_type = structured_rule.get("rule_type")
+    rule_type = structured_rule.get("rule_type", "unknown")
 
     builders = {
         "required_field":             _xslt_required_field,
@@ -20,7 +20,7 @@ def build_xslt(structured_rule: dict) -> str:
         "duplicate_field_check":      _xslt_duplicate,
     }
 
-    builder = builders.get(rule_type)
+    builder = builders.get(str(rule_type))
     if not builder:
         return _xslt_unknown(structured_rule)
 
