@@ -24,8 +24,8 @@ type SidebarProps = {
 
 const navItems = [
   { label: "Dashboard", icon: Home, href: "/dashboard" },
-  { label: "Rule Engine", icon: Sparkles, href: "/rule-engine" },
-  { label: "Validate Invoices", icon: FileCheck2, href: "/validate-invoices" },
+//   { label: "Rule Engine", icon: Sparkles, href: "/rule-engine" },
+//   { label: "Validate Invoices", icon: FileCheck2, href: "/validate-invoices" },
   { label: "Rules Library", icon: FileCode2, href: "/rules-library" },
 //   { label: "Invoices", icon: FileText },
   { label: "Validation Results", icon: ShieldCheck, href: "/validation-results" },

@@ -3,7 +3,7 @@
  * Centralized API layer with fetch wrapper, error handling, and typed methods
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 // ============================================================================
@@ -99,7 +99,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type');
   
   if (!response.ok) {
-    let errorData: any = {};
+    let errorData: { detail?: string; message?: string; [key: string]: unknown } = {};
     if (contentType?.includes('application/json')) {
       try {
         errorData = await response.json();
@@ -126,7 +126,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
   try {
     return await response.json();
-  } catch (error) {
+  } catch {
     throw new APIClientError(
       'JSON_PARSE_ERROR',
       'Failed to parse server response',
@@ -170,9 +170,6 @@ export const apiClient = {
     try {
       const response = await fetchWithTimeout(url, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
 
       const data = await parseResponse<T>(response);
