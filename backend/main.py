@@ -49,8 +49,9 @@ from schemas import (
 # ── DB imports (Steve's modules) ─────────────────────────────────────────────
 # Imported defensively so main.py still boots if Steve's files aren't ready yet.
 try:
-    from database import get_db, init_db
-    import models
+    from orm_models import (
+        get_db, init_db, Rule, Invoice, ValidationResult, AsyncSessionLocal
+    )
     from sqlalchemy.ext.asyncio import AsyncSession
     _DB_AVAILABLE = True
 except ImportError:

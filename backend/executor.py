@@ -316,6 +316,40 @@ def execute_all_rules(rules: list, invoice: dict, all_invoice_ids: list = []) ->
     }
 
 
+# ─── Class wrapper for evaluator integration ──────────────────────────────────
+
+class RuleExecutor:
+    """Class-based wrapper for rule execution to support evaluator.py integration."""
+    
+    def execute(self, rule: dict, invoice: dict) -> tuple[str, str]:
+        """Execute a parsed rule against an invoice.
+        
+        Args:
+            rule: Parsed rule dictionary from RuleParser
+            invoice: Invoice data dictionary from XMLReader
+            
+        Returns:
+            Tuple of (status, message) where status is PASS/FAIL/ERROR
+        """
+        result = execute_rule(rule, invoice)
+        return result.get("status", "ERROR"), result.get("message", "Unknown error")
+    
+    def execute_all(self, rules: list[dict], invoice: dict, all_invoice_ids: list = None) -> dict:
+        """Execute multiple rules against an invoice.
+        
+        Args:
+            rules: List of parsed rule dictionaries
+            invoice: Invoice data dictionary
+            all_invoice_ids: Optional list of all known invoice IDs for deduplication checks
+            
+        Returns:
+            Dictionary with results and summary
+        """
+        if all_invoice_ids is None:
+            all_invoice_ids = []
+        return execute_all_rules(rules, invoice, all_invoice_ids)
+
+
 # ─── Self test ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
