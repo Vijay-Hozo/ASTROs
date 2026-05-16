@@ -14,8 +14,8 @@ from datetime import datetime
 
 class ValidateRequest(BaseModel):
     """Single rule + single XML invoice validation."""
-    rule_text: str = Field(..., min_length=5, description="Natural language rule in plain English")
-    xml_content: str = Field(..., min_length=10, description="Raw XML invoice string")
+    rule_text: str = Field(..., min_length=5, max_length=500, description="Natural language rule in plain English (max 500 chars)")
+    xml_content: str = Field(..., min_length=10, max_length=1000000, description="Raw XML invoice string (max 1MB)")
 
     @field_validator("rule_text")
     @classmethod
@@ -78,7 +78,7 @@ class ValidateBatchRequest(BaseModel):
 
 class SaveRuleRequest(BaseModel):
     """Persist a natural-language rule to the database."""
-    rule_text: str = Field(..., min_length=5, description="Natural language rule in plain English")
+    rule_text: str = Field(..., min_length=5, max_length=500, description="Natural language rule in plain English (max 500 chars)")
     severity: str = Field(default="medium", description="Rule severity: low | medium | high | critical")
 
     @field_validator("severity")

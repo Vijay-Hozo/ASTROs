@@ -1,16 +1,22 @@
 """
 xslt_executor.py — runs a generated XSLT string against an XML invoice string.
-Uses lxml. Returns structured PASS/FAIL result.
+Uses lxml with defusedxml safeguards. Returns structured PASS/FAIL result.
 """
 
 from datetime import date
 from lxml import etree
+try:
+    from defusedxml import lxml as defused_lxml
+except ImportError:
+    defused_lxml = None
 
 
 def execute_xslt(xslt_str: str, xml_str: str, rule_text: str = "") -> dict:
     """
     Runs XSLT against XML invoice.
     Injects today's date as `current_date` param for date validation rules.
+    
+    Uses defusedxml safeguards where available to prevent XXE attacks.
     Returns: { status, field, message, rule_text }
     """
     try:
@@ -20,23 +26,51 @@ def execute_xslt(xslt_str: str, xml_str: str, rule_text: str = "") -> dict:
         return {
             "status":    "ERROR",
             "field":     None,
-            "message":   f"Invalid XSLT generated: {str(e)}",
+            "message":   f"Invalid XSLT generated: {str(e)[:80]}",
+            "rule_text": rule_text,
+        }
+    except Exception as e:
+        return {
+            "status":    "ERROR",
+            "field":     None,
+            "message":   f"XSLT compilation failed: {str(e)[:80]}",
             "rule_text": rule_text,
         }
 
     try:
-        xml_doc = etree.fromstring(xml_str.encode())
+        # Try to use defused parser if available, otherwise fall back to standard
+        if defused_lxml:
+            parser = defused_lxml.XMLParser(resolve_entities=False)
+            xml_doc = etree.fromstring(xml_str.encode(), parser=parser)
+        else:
+            xml_doc = etree.fromstring(xml_str.encode())
     except etree.XMLSyntaxError as e:
         return {
             "status":    "ERROR",
             "field":     None,
-            "message":   f"Invalid XML invoice: {str(e)}",
+            "message":   f"Invalid XML invoice: {str(e)[:80]}",
+            "rule_text": rule_text,
+        }
+    except Exception as e:
+        return {
+            "status":    "ERROR",
+            "field":     None,
+            "message":   f"XML parsing failed: {str(e)[:80]}",
             "rule_text": rule_text,
         }
 
     # Inject today's ISO date so XSLT 1.0 date comparisons work correctly.
     today = date.today().isoformat()
-    result_tree = transform(xml_doc, current_date=f"'{today}'")
+    try:
+        result_tree = transform(xml_doc, current_date=f"'{today}'")
+    except Exception as e:
+        return {
+            "status":    "ERROR",
+            "field":     None,
+            "message":   f"XSLT execution failed: {str(e)[:80]}",
+            "rule_text": rule_text,
+        }
+
     result_root = result_tree.getroot()
 
     if result_root is None:
