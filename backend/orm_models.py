@@ -98,7 +98,7 @@ async def init_db():
     """Create all tables on startup if they don't exist."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print(f"✅ Database initialised at {DB_PATH}")
+    print(f"Database initialised at {DB_PATH}")
 
 
 async def get_db():
