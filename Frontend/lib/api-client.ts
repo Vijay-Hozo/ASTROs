@@ -3,7 +3,7 @@
  * Centralized API layer with fetch wrapper, error handling, and typed methods
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 // ============================================================================
