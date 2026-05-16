@@ -1,72 +1,106 @@
 """
-evaluator.py - Integration layer between main.py and Steve's executor.
-Updated to call Steve's standalone functions.
+evaluator.py — Integration layer.
+Uses llm_rule_parser → xslt_templates → xslt_executor pipeline.
 """
 
-from typing import List, Optional, Tuple
-import rule_parser
-import xml_reader
-import executor
+import json
+from typing import Optional, List
+from llm_rule_parser import parse_rule, parse_rule_and_build_xslt
+from xslt_executor import execute_xslt, execute_all_rules
+from xml_reader import parse_invoice_xml
+
 
 def evaluate_one(rule_text: str, xml_content: str, rule_id: Optional[int] = None) -> dict:
-    """Validate a single rule text against a single XML string."""
-    # 1. Parse rule
-    parsed = rule_parser.parse_rule(rule_text)
-    
-    # 2. Extract fields
-    invoice_data = xml_reader.parse_invoice_xml(xml_content)
-    if "_parse_error" in invoice_data:
+    """
+    Single rule + single XML → PASS/FAIL result.
+    """
+    # Check XML is valid first
+    invoice = parse_invoice_xml(xml_content)
+    if "_parse_error" in invoice:
         return {
-            "rule_id": rule_id,
+            "rule_id":   rule_id,
             "rule_text": rule_text,
-            "status": "ERROR",
-            "message": f"XML Parse Error: {invoice_data['_parse_error']}",
-            "rule_type": parsed.get("rule_type")
+            "rule_type": None,
+            "status":    "ERROR",
+            "message":   f"XML parse error: {invoice['_parse_error']}",
+            "field":     None,
         }
 
-    # 3. Execute
-    # Note: Steve's executor returns a dict: {status, rule_type, field, message}
-    result = executor.execute_rule(parsed, invoice_data)
-    
-    # 4. Format for API
+    # LLM parse → build XSLT → execute
+    result   = parse_rule_and_build_xslt(rule_text)
+    structured = result["structured"]
+    xslt_str   = result["xslt"]
+
+    res = execute_xslt(xslt_str, xml_content, rule_text)
+
     return {
-        "rule_id": rule_id,
+        "rule_id":   rule_id,
         "rule_text": rule_text,
-        "rule_type": result.get("rule_type"),
-        "status": result.get("status"),
-        "message": result.get("message"),
-        "field": result.get("field")
+        "rule_type": structured.get("rule_type"),
+        "status":    res.get("status"),
+        "message":   res.get("message"),
+        "field":     res.get("field"),
     }
 
+
 def evaluate_batch(rules: List[dict], xml_content: str) -> dict:
-    """Evaluate multiple rules against one XML."""
-    invoice_data = xml_reader.parse_invoice_xml(xml_content)
-    
-    results = []
-    passed = 0
-    failed = 0
-    
-    for r in rules:
-        rule_text = r.get("rule_text")
-        rule_id = r.get("id")
-        
-        parsed = rule_parser.parse_rule(rule_text)
-        res = executor.execute_rule(parsed, invoice_data)
-        
-        item = {
-            "rule_id": rule_id,
-            "rule_text": rule_text,
-            "rule_type": res.get("rule_type"),
-            "status": res.get("status"),
-            "message": res.get("message"),
-            "field": res.get("field")
+    """
+    Multiple rules (each with prebuilt xslt) against one XML.
+    Each rule dict must have: { id, rule_text, parsed_json (JSON string with xslt key) }
+    """
+    invoice = parse_invoice_xml(xml_content)
+    if "_parse_error" in invoice:
+        return {
+            "invoice_id": "unknown",
+            "summary": {"total": 0, "passed": 0, "failed": 0},
+            "results": [],
+            "error": f"XML parse error: {invoice['_parse_error']}",
         }
-        results.append(item)
-        if res.get("status") == "PASS": passed += 1
-        elif res.get("status") == "FAIL": failed += 1
+
+    # Build rule list for xslt_executor
+    rule_list = []
+    for r in rules:
+        parsed_json = r.get("parsed_json", "{}")
+        if isinstance(parsed_json, str):
+            try:
+                parsed = json.loads(parsed_json)
+            except Exception:
+                parsed = {}
+        else:
+            parsed = parsed_json
+
+        xslt = parsed.get("xslt")
+        if not xslt:
+            # No stored XSLT — build it now
+            try:
+                from xslt_templates import build_xslt
+                xslt = build_xslt(parsed)
+            except Exception:
+                xslt = ""
+
+        rule_list.append({
+            "rule_id":    r.get("id"),
+            "rule_text":  r.get("rule_text", ""),
+            "xslt":       xslt,
+            "structured": parsed,
+        })
+
+    out = execute_all_rules(rule_list, xml_content)
+
+    # Normalise result keys for API response
+    results = []
+    for r in out["results"]:
+        results.append({
+            "rule_id":   r.get("rule_id"),
+            "rule_text": r.get("rule_text", ""),
+            "rule_type": r.get("rule_type"),
+            "status":    r.get("status"),
+            "message":   r.get("message"),
+            "field":     r.get("field"),
+        })
 
     return {
-        "invoice_id": str(invoice_data.get("invoice_id", "unknown")),
-        "summary": {"total": len(results), "passed": passed, "failed": failed},
-        "results": results
+        "invoice_id": out.get("invoice_id", "unknown"),
+        "summary":    out.get("summary"),
+        "results":    results,
     }
