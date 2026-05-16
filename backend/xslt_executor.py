@@ -38,12 +38,9 @@ def execute_xslt(xslt_str: str, xml_str: str, rule_text: str = "") -> dict:
         }
 
     try:
-        # Try to use defused parser if available, otherwise fall back to standard
-        if defused_lxml:
-            parser = defused_lxml.XMLParser(resolve_entities=False)
-            xml_doc = etree.fromstring(xml_str.encode(), parser=parser)
-        else:
-            xml_doc = etree.fromstring(xml_str.encode())
+        # Use standard lxml parser without resolving entities to prevent XXE
+        parser = etree.XMLParser(resolve_entities=False)
+        xml_doc = etree.fromstring(xml_str.encode(), parser=parser)
     except etree.XMLSyntaxError as e:
         return {
             "status":    "ERROR",

@@ -1,0 +1,9 @@
+{
+  "rule_type": "currency_consistency",
+  "field": "currency_code",
+  "operation": "matches_invoice_currency",
+  "value": "INR",
+  "message": "Currency code must be INR",
+  "_provider": "groq",
+  "rule_text": "Currency code must be INR"
+}

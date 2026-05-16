@@ -1,0 +1,105 @@
+{
+  "1": {
+    "rule_text": "Seller name is required",
+    "structured": {
+      "rule_type": "required_field",
+      "field": "seller_name",
+      "operation": "not_empty",
+      "message": "Seller name is missing",
+      "_provider": "groq",
+      "rule_text": "Seller name is required"
+    },
+    "xslt_generated": true
+  },
+  "2": {
+    "rule_text": "Buyer name is required",
+    "structured": {
+      "rule_type": "required_field",
+      "field": "buyer_name",
+      "operation": "not_empty",
+      "message": "Buyer name is missing",
+      "_provider": "groq",
+      "rule_text": "Buyer name is required"
+    },
+    "xslt_generated": true
+  },
+  "3": {
+    "rule_text": "Invoice ID is required",
+    "structured": {
+      "rule_type": "required_field",
+      "field": "invoice_id",
+      "operation": "not_empty",
+      "message": "Invoice ID is missing",
+      "_provider": "groq",
+      "rule_text": "Invoice ID is required"
+    },
+    "xslt_generated": true
+  },
+  "4": {
+    "rule_text": "Tax amount must be exactly 18% of taxable amount",
+    "structured": {
+      "rule_type": "amount_calculation",
+      "field": "tax_amount",
+      "operation": "percentage",
+      "base_field": "taxable_amount",
+      "value": 18,
+      "message": "Tax amount mismatch",
+      "_provider": "groq",
+      "rule_text": "Tax amount must be exactly 18% of taxable amount"
+    },
+    "xslt_generated": true
+  },
+  "5": {
+    "rule_text": "Currency code must be INR",
+    "structured": {
+      "rule_type": "currency_consistency",
+      "field": "currency_code",
+      "operation": "in",
+      "value": [
+        "INR"
+      ],
+      "message": "Invalid currency code",
+      "_provider": "groq",
+      "rule_text": "Currency code must be INR"
+    },
+    "xslt_generated": true
+  },
+  "6": {
+    "rule_text": "Issue date cannot be in the future",
+    "structured": {
+      "rule_type": "date_validation",
+      "field": "issue_date",
+      "operation": "not_future",
+      "message": "Issue date cannot be in the future",
+      "_provider": "groq",
+      "rule_text": "Issue date cannot be in the future"
+    },
+    "xslt_generated": true
+  },
+  "7": {
+    "rule_text": "Payable amount must be greater than 0",
+    "structured": {
+      "rule_type": "numeric_comparison",
+      "field": "payable_amount",
+      "operation": "gt",
+      "value": 0,
+      "message": "Payable amount must be greater than 0",
+      "_provider": "groq",
+      "rule_text": "Payable amount must be greater than 0"
+    },
+    "xslt_generated": true
+  },
+  "9": {
+    "rule_text": "La devise de la facture doit \u00eatre USD",
+    "structured": {
+      "rule_type": "currency_consistency",
+      "field": "currency_code",
+      "operation": "matches_invoice_currency",
+      "value": "USD",
+      "message": "Invoice currency must be USD",
+      "_provider": "groq",
+      "rule_text": "La devise de la facture doit \u00eatre USD"
+    },
+    "xslt_generated": true
+  }
+}

@@ -257,6 +257,13 @@ async def validate_all_rules(body: BatchEvaluateRequest, db: AsyncSession = Depe
     # Validate XML size
     if len(body.xml_content) > MAX_XML_SIZE:
         raise HTTPException(status_code=413, detail=f"XML too large (max {MAX_XML_SIZE} bytes)")
+
+    # Guard: reject plaintext/badly malformed XML before hitting the executor
+    try:
+        from lxml import etree as _etree
+        _etree.fromstring(body.xml_content.encode())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid XML format: {str(e)[:80]}")
     
     # Fetch all rules
     try:

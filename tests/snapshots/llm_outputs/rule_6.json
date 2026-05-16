@@ -1,0 +1,8 @@
+{
+  "rule_type": "date_validation",
+  "field": "issue_date",
+  "operation": "not_future",
+  "message": "Issue date cannot be in the future",
+  "_provider": "groq",
+  "rule_text": "Issue date cannot be in the future"
+}

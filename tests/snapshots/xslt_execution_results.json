@@ -1,0 +1,202 @@
+{
+  "valid": {
+    "1": {
+      "status": "PASS",
+      "field": "seller_name",
+      "message": "seller_name is present",
+      "rule_text": "Seller name is required"
+    },
+    "2": {
+      "status": "PASS",
+      "field": "buyer_name",
+      "message": "buyer_name is present",
+      "rule_text": "Buyer name is required"
+    },
+    "3": {
+      "status": "PASS",
+      "field": "invoice_id",
+      "message": "invoice_id is present",
+      "rule_text": "Invoice ID is required"
+    },
+    "4": {
+      "status": "PASS",
+      "field": "tax_amount",
+      "message": "tax_amount correctly calculated as 18.0% of taxable_amount",
+      "rule_text": "Tax amount must be exactly 18% of taxable amount"
+    },
+    "5": {
+      "status": "PASS",
+      "field": "currency_code",
+      "message": "Currency is valid",
+      "rule_text": "Currency code must be INR"
+    },
+    "6": {
+      "status": "PASS",
+      "field": "issue_date",
+      "message": "issue_date is not in the future",
+      "rule_text": "Issue date cannot be in the future"
+    },
+    "7": {
+      "status": "PASS",
+      "field": "payable_amount",
+      "message": "payable_amount passes numeric check",
+      "rule_text": "Payable amount must be greater than 0"
+    },
+    "9": {
+      "status": "PASS",
+      "field": "line_item_currency",
+      "message": "All line item currencies match invoice currency",
+      "rule_text": "La devise de la facture doit \u00eatre USD"
+    }
+  },
+  "invalid_tax": {
+    "1": {
+      "status": "PASS",
+      "field": "seller_name",
+      "message": "seller_name is present",
+      "rule_text": "Seller name is required"
+    },
+    "2": {
+      "status": "PASS",
+      "field": "buyer_name",
+      "message": "buyer_name is present",
+      "rule_text": "Buyer name is required"
+    },
+    "3": {
+      "status": "PASS",
+      "field": "invoice_id",
+      "message": "invoice_id is present",
+      "rule_text": "Invoice ID is required"
+    },
+    "4": {
+      "status": "FAIL",
+      "field": "tax_amount",
+      "message": "Tax amount mismatch. Expected 1932.894, found 1500",
+      "rule_text": "Tax amount must be exactly 18% of taxable amount"
+    },
+    "5": {
+      "status": "PASS",
+      "field": "currency_code",
+      "message": "Currency is valid",
+      "rule_text": "Currency code must be INR"
+    },
+    "6": {
+      "status": "PASS",
+      "field": "issue_date",
+      "message": "issue_date is not in the future",
+      "rule_text": "Issue date cannot be in the future"
+    },
+    "7": {
+      "status": "PASS",
+      "field": "payable_amount",
+      "message": "payable_amount passes numeric check",
+      "rule_text": "Payable amount must be greater than 0"
+    },
+    "9": {
+      "status": "PASS",
+      "field": "line_item_currency",
+      "message": "All line item currencies match invoice currency",
+      "rule_text": "La devise de la facture doit \u00eatre USD"
+    }
+  },
+  "future_date": {
+    "1": {
+      "status": "PASS",
+      "field": "seller_name",
+      "message": "seller_name is present",
+      "rule_text": "Seller name is required"
+    },
+    "2": {
+      "status": "PASS",
+      "field": "buyer_name",
+      "message": "buyer_name is present",
+      "rule_text": "Buyer name is required"
+    },
+    "3": {
+      "status": "PASS",
+      "field": "invoice_id",
+      "message": "invoice_id is present",
+      "rule_text": "Invoice ID is required"
+    },
+    "4": {
+      "status": "PASS",
+      "field": "tax_amount",
+      "message": "tax_amount correctly calculated as 18.0% of taxable_amount",
+      "rule_text": "Tax amount must be exactly 18% of taxable amount"
+    },
+    "5": {
+      "status": "PASS",
+      "field": "currency_code",
+      "message": "Currency is valid",
+      "rule_text": "Currency code must be INR"
+    },
+    "6": {
+      "status": "FAIL",
+      "field": "issue_date",
+      "message": "Issue date cannot be in the future. 'issue_date' is in the future",
+      "rule_text": "Issue date cannot be in the future"
+    },
+    "7": {
+      "status": "PASS",
+      "field": "payable_amount",
+      "message": "payable_amount passes numeric check",
+      "rule_text": "Payable amount must be greater than 0"
+    },
+    "9": {
+      "status": "PASS",
+      "field": "line_item_currency",
+      "message": "All line item currencies match invoice currency",
+      "rule_text": "La devise de la facture doit \u00eatre USD"
+    }
+  },
+  "missing_seller": {
+    "1": {
+      "status": "FAIL",
+      "field": "seller_name",
+      "message": "Seller name is missing",
+      "rule_text": "Seller name is required"
+    },
+    "2": {
+      "status": "PASS",
+      "field": "buyer_name",
+      "message": "buyer_name is present",
+      "rule_text": "Buyer name is required"
+    },
+    "3": {
+      "status": "PASS",
+      "field": "invoice_id",
+      "message": "invoice_id is present",
+      "rule_text": "Invoice ID is required"
+    },
+    "4": {
+      "status": "PASS",
+      "field": "tax_amount",
+      "message": "tax_amount correctly calculated as 18.0% of taxable_amount",
+      "rule_text": "Tax amount must be exactly 18% of taxable amount"
+    },
+    "5": {
+      "status": "PASS",
+      "field": "currency_code",
+      "message": "Currency is valid",
+      "rule_text": "Currency code must be INR"
+    },
+    "6": {
+      "status": "PASS",
+      "field": "issue_date",
+      "message": "issue_date is not in the future",
+      "rule_text": "Issue date cannot be in the future"
+    },
+    "7": {
+      "status": "PASS",
+      "field": "payable_amount",
+      "message": "payable_amount passes numeric check",
+      "rule_text": "Payable amount must be greater than 0"
+    },
+    "9": {
+      "status": "PASS",
+      "field": "line_item_currency",
+      "message": "All line item currencies match invoice currency",
+      "rule_text": "La devise de la facture doit \u00eatre USD"
+    }
+  }
+}

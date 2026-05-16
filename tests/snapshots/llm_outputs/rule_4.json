@@ -1,0 +1,10 @@
+{
+  "rule_type": "amount_calculation",
+  "field": "tax_amount",
+  "operation": "percentage",
+  "base_field": "taxable_amount",
+  "value": 18,
+  "message": "Tax amount mismatch",
+  "_provider": "groq",
+  "rule_text": "Tax amount must be exactly 18% of taxable amount"
+}
