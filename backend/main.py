@@ -1,545 +1,515 @@
 """
-main.py - FastAPI application entry point for the PS-3 Natural Language Rule Engine.
-
-All routes are defined here. Business logic is delegated to:
-  - rule_parser.py  (parse natural language → JSON)
-  - xml_reader.py   (extract fields from XML)
-  - evaluator.py    (batch scoring engine)          ← Satwiq
-  - executor.py     (low-level rule execution)      ← Steve
-  - database.py     (DB session factory)            ← Steve
-  - models.py       (ORM models)                    ← Steve
-  - schemas.py      (Pydantic models)               ← Satwiq
-
-Run locally:
-    uvicorn main:app --reload --port 8000
+main.py — FastAPI application. Clean, fully wired.
+Pipeline: llm_rule_parser → xslt_templates → xslt_executor
+CRITICAL: All CPU-bound operations run off event loop via run_in_threadpool
 """
-
-from __future__ import annotations
 
 import json
 import os
+from typing import List, Optional
 from datetime import datetime, timezone
-from typing import List
+import asyncio
+import logging
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from evaluator import Evaluator
-from rule_parser import RuleParser
+from orm_models import get_db, init_db, Rule, Invoice, ValidationResult
 from schemas import (
     ValidateRequest,
     ValidateBatchRequest,
     SaveRuleRequest,
     BatchEvaluateRequest,
-    ValidationResult,
+    ValidationResult as ValidationResultSchema,
     BatchValidationResponse,
     BatchSummary,
     SavedRuleResponse,
     InvoiceResponse,
-    ResultRecord,
     DashboardStats,
-    TrendResponse,
-    TrendPoint,
     HealthResponse,
-    DatasetGenerateResponse,
-    DeleteResponse,
-    ParsedRule,
 )
+from evaluator import evaluate_one, evaluate_batch
+from llm_rule_parser import parse_rule_and_build_xslt
 
-# ── DB imports (Steve's modules) ─────────────────────────────────────────────
-# Imported defensively so main.py still boots if Steve's files aren't ready yet.
-try:
-    from database import get_db, init_db
-    import models
-    from sqlalchemy.ext.asyncio import AsyncSession
-    _DB_AVAILABLE = True
-except ImportError:
-    _DB_AVAILABLE = False
-    AsyncSession = None  # type: ignore
-    get_db = None  # type: ignore
+# ─── Configuration ────────────────────────────────────────────────────────────
 
-# ── Dataset generator (dataset_gen.py, moved by Steve) ───────────────────────
-try:
-    from dataset_gen import generate_dataset
-    _DATASET_GEN_AVAILABLE = True
-except ImportError:
-    _DATASET_GEN_AVAILABLE = False
+BATCH_VALIDATION_TIMEOUT = 60  # 60 seconds timeout for batch validations
+PARSE_TIMEOUT = 30  # 30 seconds timeout for parsing
+MAX_XML_SIZE = 1_000_000  # 1MB max XML size
+# ─── Logging ──────────────────────────────────────────────────────────────────
 
-# ─────────────────────────────────────────────
-# APP SETUP
-# ─────────────────────────────────────────────
+logger = logging.getLogger(__name__)
+# ─── Rule text sanity guard ───────────────────────────────────────────────────
+
+_SUSPICIOUS_TOKENS = [
+    "' or", "or 1=1", "--", "drop table", "insert into",
+    "select *", "<script", "exec(", "union select",
+]
+
+def _validate_rule_text(rule_text: str) -> None:
+    """
+    Lightweight sanity check before sending rule_text to the LLM.
+    Raises HTTPException(400) on bad input. Not a security boundary —
+    the LLM sanitises output — but prevents junk from reaching the DB.
+    """
+    text = rule_text.strip()
+    if len(text) < 5:
+        raise HTTPException(status_code=400, detail="rule_text too short (min 5 chars)")
+    if len(text) > 500:
+        raise HTTPException(status_code=422, detail="rule_text too long (max 500 chars)")
+    lower = text.lower()
+    for token in _SUSPICIOUS_TOKENS:
+        if token in lower:
+            raise HTTPException(status_code=400, detail="rule_text contains disallowed content")
+
+# ─── App setup ────────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="PS-3 Natural Language Rule Engine",
-    description=(
-        "Converts plain-English invoice validation rules into executable logic "
-        "and validates XML invoices — no XSLT or hardcoded scripts required."
-    ),
+    description="Plain English invoice validation rules → XSLT → XML validation",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# CORS — allow Vercel frontend and local dev
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    os.getenv("FRONTEND_URL", "https://ps3-rule-engine.vercel.app"),
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Shared evaluator instance (stateless, safe to reuse)
-evaluator = Evaluator()
-parser = RuleParser()
+
+# ─── Exception Middleware ─────────────────────────────────────────────────────
+
+@app.middleware("http")
+async def exception_middleware(request: Request, call_next):
+    """
+    Global exception handler middleware.
+    Prevents stacktrace leakage and sanitizes error responses.
+    """
+    try:
+        return await call_next(request)
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
+    except asyncio.TimeoutError:
+        logger.warning(f"Request timeout: {request.url.path}")
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "Request timeout"},
+        )
+    except Exception as e:
+        logger.error(f"Unhandled exception: {type(e).__name__}: {str(e)[:100]}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},  # Don't leak details
+        )
 
 
-# ── DB lifecycle ─────────────────────────────────────────────────────────────
 @app.on_event("startup")
-async def on_startup() -> None:
-    if _DB_AVAILABLE:
-        await init_db()
+async def on_startup():
+    await init_db()
 
 
-# ─────────────────────────────────────────────
-# HELPER: build ValidationResult response dict
-# ─────────────────────────────────────────────
+# ─── Health ───────────────────────────────────────────────────────────────────
 
-def _to_validation_result(er) -> dict:
-    """Convert an EvaluationResult to a schema-compatible dict."""
-    parsed = er.parsed_rule
-    parsed_schema = None
-    if isinstance(parsed, dict):
-        parsed_schema = {
-            "rule_type": parsed.get("rule_type", "unknown"),
-            "field": parsed.get("field"),
-            "operation": parsed.get("operation"),
-            "base_field": parsed.get("base_field"),
-            "value": parsed.get("value"),
-            "condition_field": parsed.get("condition_field"),
-            "condition_value": parsed.get("condition_value"),
-        }
+@app.get("/health", response_model=HealthResponse)
+async def health():
     return {
-        "rule_id": er.rule_id,
-        "rule_text": er.rule_text,
-        "parsed_rule": parsed_schema,
-        "result": er.result,
-        "message": er.message,
-        "invoice_id": er.invoice_id,
-    }
-
-
-# ─────────────────────────────────────────────
-# HEALTH CHECK
-# ─────────────────────────────────────────────
-
-@app.get("/health", response_model=HealthResponse, tags=["System"])
-async def health_check():
-    """Quick system status check. Returns 200 if the API is running."""
-    return {
-        "status": "ok",
-        "version": "1.0.0",
+        "status":    "ok",
+        "version":   "1.0.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
-# ─────────────────────────────────────────────
-# VALIDATE — single rule + single XML
-# ─────────────────────────────────────────────
+# ─── Rules CRUD ───────────────────────────────────────────────────────────────
 
-@app.post("/validate", response_model=ValidationResult, tags=["Validation"])
-async def validate_single(body: ValidateRequest):
-    """
-    Validate ONE natural-language rule against ONE XML invoice.
+@app.post("/rules", response_model=SavedRuleResponse)
+async def create_rule(body: SaveRuleRequest, db: AsyncSession = Depends(get_db)):
+    """Save a new English rule — LLM parses it and stores XSLT too."""
+    _validate_rule_text(body.rule_text)
+    try:
+        # Run CPU-bound LLM parsing off the event loop with timeout protection
+        try:
+            result = await asyncio.wait_for(
+                run_in_threadpool(parse_rule_and_build_xslt, body.rule_text),
+                timeout=PARSE_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Rule parsing timeout (30s limit)")
 
-    Steps:
-    1. Parse rule text → structured JSON
-    2. Extract fields from XML
-    3. Execute the rule
-    4. Return PASS / FAIL / ERROR with an explanation message
-    """
-    er = evaluator.evaluate_one(body.rule_text, body.xml_content)
-    return _to_validation_result(er)
+        structured = result["structured"]
+        xslt_str   = result["xslt"]
 
+        # Store both structured rule AND xslt in parsed_json
+        stored = {**structured, "xslt": xslt_str}
 
-# ─────────────────────────────────────────────
-# VALIDATE — single rule + many XMLs
-# ─────────────────────────────────────────────
-
-@app.post("/validate/batch", response_model=BatchValidationResponse, tags=["Validation"])
-async def validate_batch(body: ValidateBatchRequest):
-    """
-    Validate ONE natural-language rule against MANY XML invoices.
-
-    Returns an array of results plus a summary (total / passed / failed).
-    """
-    results, summary = evaluator.evaluate_rule_against_many(
-        body.rule_text, body.xml_files
-    )
-    return {
-        "results": [_to_validation_result(r) for r in results],
-        "summary": summary.to_dict(),
-    }
-
-
-# ─────────────────────────────────────────────
-# VALIDATE — all saved rules against one XML
-# ─────────────────────────────────────────────
-
-@app.post("/validate/all-rules", response_model=BatchValidationResponse, tags=["Validation"])
-async def validate_all_saved_rules(body: BatchEvaluateRequest):
-    """
-    Run ALL saved rules in the database against ONE XML invoice.
-
-    Requires database.py to be available.
-    """
-    if not _DB_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Check database.py is present.",
-        )
-
-    async for db in get_db():
-        from sqlalchemy import select
-        stmt = select(models.Rule)
-        result = await db.execute(stmt)
-        rules = result.scalars().all()
-
-    if not rules:
-        raise HTTPException(status_code=404, detail="No rules saved in the database")
-
-    rule_dicts = [
-        {"id": r.id, "rule_text": r.rule_text}
-        for r in rules
-    ]
-    results, summary = evaluator.evaluate_many_rules(rule_dicts, body.xml_content)
-    return {
-        "results": [_to_validation_result(r) for r in results],
-        "summary": summary.to_dict(),
-    }
-
-
-# ─────────────────────────────────────────────
-# RULES — CRUD
-# ─────────────────────────────────────────────
-
-@app.post("/rules", response_model=SavedRuleResponse, tags=["Rules"])
-async def save_rule(body: SaveRuleRequest):
-    """
-    Parse and persist a new natural-language rule to the database.
-    Returns the stored rule including its generated ID.
-    """
-    if not _DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    parsed = parser.parse(body.rule_text)
-
-    async for db in get_db():
-        rule = models.Rule(
+        new_rule = Rule(
             rule_text=body.rule_text,
-            parsed_json=json.dumps(parsed),
+            parsed_json=json.dumps(stored),
+            rule_type=structured.get("rule_type"),
             severity=body.severity,
         )
-        db.add(rule)
+        db.add(new_rule)
         await db.commit()
-        await db.refresh(rule)
+        await db.refresh(new_rule)
 
-    return {
-        "id": rule.id,
-        "rule_text": rule.rule_text,
-        "parsed_json": parsed,
-        "severity": rule.severity,
-        "created_at": rule.created_at.isoformat() if rule.created_at else "",
-    }
-
-
-@app.get("/rules", response_model=List[SavedRuleResponse], tags=["Rules"])
-async def list_rules():
-    """Return all saved rules, newest first."""
-    if not _DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    async for db in get_db():
-        from sqlalchemy import select
-        stmt = select(models.Rule).order_by(models.Rule.created_at.desc())
-        result = await db.execute(stmt)
-        rules = result.scalars().all()
-
-    return [
-        {
-            "id": r.id,
-            "rule_text": r.rule_text,
-            "parsed_json": json.loads(r.parsed_json) if r.parsed_json else None,
-            "severity": r.severity,
-            "created_at": r.created_at.isoformat() if r.created_at else "",
+        return {
+            "id":          new_rule.id,
+            "rule_text":   new_rule.rule_text,
+            "parsed_json": stored,
+            "severity":    new_rule.severity,
+            "created_at":  new_rule.created_at.isoformat(),
         }
-        for r in rules
-    ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Rule creation failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Rule creation failed")
 
 
-@app.delete("/rules/{rule_id}", response_model=DeleteResponse, tags=["Rules"])
-async def delete_rule(rule_id: int):
-    """Delete a saved rule by its ID."""
-    if not _DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Database not available")
+@app.get("/rules", response_model=List[SavedRuleResponse])
+async def list_rules(db: AsyncSession = Depends(get_db)):
+    """List all saved rules."""
+    try:
+        result = await db.execute(select(Rule).order_by(Rule.created_at.desc()))
+        rules  = result.scalars().all()
+        return [
+            {
+                "id":          r.id,
+                "rule_text":   r.rule_text,
+                "parsed_json": json.loads(r.parsed_json) if r.parsed_json else {},
+                "severity":    r.severity,
+                "created_at":  r.created_at.isoformat(),
+            }
+            for r in rules
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list rules: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to list rules")
 
-    async for db in get_db():
-        rule = await db.get(models.Rule, rule_id)
+
+@app.delete("/rules/{rule_id}")
+async def delete_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a rule by ID."""
+    try:
+        result = await db.execute(select(Rule).where(Rule.id == rule_id))
+        rule   = result.scalar_one_or_none()
         if not rule:
-            raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
+            raise HTTPException(status_code=404, detail="Rule not found")
         await db.delete(rule)
         await db.commit()
+        return {"message": "Rule deleted", "id": rule_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Delete failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Delete failed")
 
-    return {"message": f"Rule {rule_id} deleted", "id": rule_id}
+
+# ─── Validate — single rule + single XML ──────────────────────────────────────
+
+@app.post("/validate")
+async def validate_single(body: ValidateRequest, db: AsyncSession = Depends(get_db)):
+    """Validate one rule against one XML (not saved to DB)."""
+    _validate_rule_text(body.rule_text)
+    
+    # Validate XML size
+    if len(body.xml_content) > MAX_XML_SIZE:
+        raise HTTPException(status_code=413, detail=f"XML too large (max {MAX_XML_SIZE} bytes)")
+    
+    # Guard: reject plaintext/badly malformed XML before hitting the executor
+    try:
+        from lxml import etree as _etree
+        _etree.fromstring(body.xml_content.encode())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid XML format: {str(e)[:80]}")
+    
+    try:
+        # Run evaluation off event loop
+        result = await asyncio.wait_for(
+            run_in_threadpool(evaluate_one, body.rule_text, body.xml_content),
+            timeout=PARSE_TIMEOUT
+        )
+        return result
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Validation timeout (30s limit)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Validation failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Validation failed")
 
 
-# ─────────────────────────────────────────────
-# INVOICES
-# ─────────────────────────────────────────────
+# ─── Validate — all saved rules against one XML ───────────────────────────────
 
-@app.post("/invoices", response_model=InvoiceResponse, tags=["Invoices"])
-async def upload_invoice(file: UploadFile = File(...)):
-    """
-    Upload an XML invoice file. Stores the raw content in the database.
-    Returns the stored invoice record with its ID.
-    """
-    if not _DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Database not available")
+@app.post("/validate/all-rules")
+async def validate_all_rules(body: BatchEvaluateRequest, db: AsyncSession = Depends(get_db)):
+    """Run all saved rules against a single XML invoice. Stores results."""
+    
+    # Validate XML size
+    if len(body.xml_content) > MAX_XML_SIZE:
+        raise HTTPException(status_code=413, detail=f"XML too large (max {MAX_XML_SIZE} bytes)")
+    
+    # Fetch all rules
+    try:
+        result = await db.execute(select(Rule).order_by(Rule.id))
+        rules  = result.scalars().all()
 
-    if not file.filename.lower().endswith(".xml"):
-        raise HTTPException(status_code=400, detail="Only .xml files are accepted")
+        if not rules:
+            raise HTTPException(status_code=404, detail="No rules saved yet. Add rules first.")
 
-    content = await file.read()
-    xml_str = content.decode("utf-8")
+        rule_list = [
+            {
+                "id":          r.id,
+                "rule_text":   r.rule_text,
+                "parsed_json": r.parsed_json,
+            }
+            for r in rules
+        ]
 
-    async for db in get_db():
-        invoice = models.Invoice(
+        # Run batch evaluation off event loop with timeout
+        try:
+            out = await asyncio.wait_for(
+                run_in_threadpool(evaluate_batch, rule_list, body.xml_content),
+                timeout=BATCH_VALIDATION_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail=f"Batch validation timeout ({BATCH_VALIDATION_TIMEOUT}s limit)")
+
+        # Store invoice
+        new_invoice = Invoice(
+            filename="inline_upload",
+            xml_content=body.xml_content,
+        )
+        db.add(new_invoice)
+        await db.commit()
+        await db.refresh(new_invoice)
+
+        # Store results
+        for r in out["results"]:
+            vr = ValidationResult(
+                invoice_id=new_invoice.id,
+                rule_id=r.get("rule_id"),
+                rule_text=r.get("rule_text", ""),
+                status=r.get("status", "ERROR"),
+                message=r.get("message", ""),
+                rule_type=r.get("rule_type"),
+            )
+            db.add(vr)
+        await db.commit()
+
+        return out
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Batch validation failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Batch validation failed")
+
+
+# ─── Upload XML file ──────────────────────────────────────────────────────────
+
+@app.post("/invoices/upload", response_model=InvoiceResponse)
+async def upload_invoice(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Upload an XML invoice file — stores it, returns invoice ID."""
+    try:
+        if not file.filename.endswith(".xml"):
+            raise HTTPException(status_code=400, detail="Only .xml files accepted")
+
+        content = await file.read()
+        if len(content) > MAX_XML_SIZE:
+            raise HTTPException(status_code=413, detail=f"File too large (max {MAX_XML_SIZE} bytes)")
+
+        xml_str = content.decode("utf-8", errors="replace")
+
+        # Validate XML
+        try:
+            from lxml import etree as _etree
+            _etree.fromstring(xml_str.encode())
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid XML file: {str(e)[:80]}")
+
+        new_invoice = Invoice(
             filename=file.filename,
             xml_content=xml_str,
         )
-        db.add(invoice)
+        db.add(new_invoice)
         await db.commit()
-        await db.refresh(invoice)
+        await db.refresh(new_invoice)
 
-    return {
-        "id": invoice.id,
-        "filename": invoice.filename,
-        "uploaded_at": invoice.uploaded_at.isoformat() if invoice.uploaded_at else "",
-        "validation_status": None,
-    }
-
-
-@app.get("/invoices", response_model=List[InvoiceResponse], tags=["Invoices"])
-async def list_invoices():
-    """Return all uploaded invoices, newest first."""
-    if not _DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    async for db in get_db():
-        from sqlalchemy import select
-        stmt = select(models.Invoice).order_by(models.Invoice.uploaded_at.desc())
-        result = await db.execute(stmt)
-        invoices = result.scalars().all()
-
-    return [
-        {
-            "id": inv.id,
-            "filename": inv.filename,
-            "uploaded_at": inv.uploaded_at.isoformat() if inv.uploaded_at else "",
-            "validation_status": None,
-        }
-        for inv in invoices
-    ]
-
-
-# ─────────────────────────────────────────────
-# RESULTS
-# ─────────────────────────────────────────────
-
-@app.get("/results", response_model=List[ResultRecord], tags=["Results"])
-async def list_results():
-    """Return all stored validation results, newest first."""
-    if not _DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    async for db in get_db():
-        from sqlalchemy import select
-        stmt = select(models.ValidationResult).order_by(
-            models.ValidationResult.id.desc()
-        )
-        result = await db.execute(stmt)
-        records = result.scalars().all()
-
-    return [
-        {
-            "id": r.id,
-            "invoice_id": r.invoice_id,
-            "rule_id": r.rule_id,
-            "status": r.status,
-            "message": r.message,
-        }
-        for r in records
-    ]
-
-
-@app.get("/results/{invoice_id}", response_model=List[ResultRecord], tags=["Results"])
-async def get_results_for_invoice(invoice_id: int):
-    """Return all validation results for a specific invoice."""
-    if not _DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    async for db in get_db():
-        from sqlalchemy import select
-        stmt = select(models.ValidationResult).where(
-            models.ValidationResult.invoice_id == invoice_id
-        )
-        result = await db.execute(stmt)
-        records = result.scalars().all()
-
-    if not records:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No results found for invoice {invoice_id}",
-        )
-
-    return [
-        {
-            "id": r.id,
-            "invoice_id": r.invoice_id,
-            "rule_id": r.rule_id,
-            "status": r.status,
-            "message": r.message,
-        }
-        for r in records
-    ]
-
-
-# ─────────────────────────────────────────────
-# DASHBOARD
-# ─────────────────────────────────────────────
-
-@app.get("/dashboard/stats", response_model=DashboardStats, tags=["Dashboard"])
-async def dashboard_stats():
-    """
-    Return aggregated stat counts for the dashboard cards:
-    total rules, total invoices, total validations, pass/fail counts.
-    """
-    if not _DB_AVAILABLE:
-        # Return zeros so the frontend still renders
         return {
-            "total_rules": 0,
-            "total_invoices": 0,
-            "total_validations": 0,
-            "total_passed": 0,
-            "total_failed": 0,
-            "pass_rate": 0.0,
+            "id":          new_invoice.id,
+            "filename":    new_invoice.filename,
+            "uploaded_at": new_invoice.uploaded_at.isoformat(),
         }
-
-    from sqlalchemy import select, func
-
-    async for db in get_db():
-        total_rules = (await db.execute(select(func.count(models.Rule.id)))).scalar() or 0
-        total_invoices = (await db.execute(select(func.count(models.Invoice.id)))).scalar() or 0
-        total_validations = (
-            await db.execute(select(func.count(models.ValidationResult.id)))
-        ).scalar() or 0
-        total_passed = (
-            await db.execute(
-                select(func.count(models.ValidationResult.id)).where(
-                    models.ValidationResult.status == "PASS"
-                )
-            )
-        ).scalar() or 0
-        total_failed = (
-            await db.execute(
-                select(func.count(models.ValidationResult.id)).where(
-                    models.ValidationResult.status == "FAIL"
-                )
-            )
-        ).scalar() or 0
-
-    pass_rate = (
-        round(total_passed / total_validations * 100, 1) if total_validations > 0 else 0.0
-    )
-
-    return {
-        "total_rules": total_rules,
-        "total_invoices": total_invoices,
-        "total_validations": total_validations,
-        "total_passed": total_passed,
-        "total_failed": total_failed,
-        "pass_rate": pass_rate,
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Upload failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Upload failed")
 
 
-@app.get("/dashboard/trends", response_model=TrendResponse, tags=["Dashboard"])
-async def dashboard_trends():
-    """
-    Return pass/fail counts grouped by date for the last 7 days.
-    Used to render the trend chart on the dashboard.
-    """
-    if not _DB_AVAILABLE:
-        return {"points": []}
-
-    from sqlalchemy import select, func, cast
-    from sqlalchemy import Date as SADate
-
-    async for db in get_db():
-        stmt = (
-            select(
-                cast(models.ValidationResult.created_at, SADate).label("day"),
-                models.ValidationResult.status,
-                func.count(models.ValidationResult.id).label("cnt"),
-            )
-            .group_by("day", models.ValidationResult.status)
-            .order_by("day")
-        )
-        rows = (await db.execute(stmt)).all()
-
-    # Pivot into {date: {PASS: n, FAIL: n}}
-    pivot: dict = {}
-    for day, status, cnt in rows:
-        key = str(day)
-        if key not in pivot:
-            pivot[key] = {"PASS": 0, "FAIL": 0}
-        pivot[key][status] = pivot[key].get(status, 0) + cnt
-
-    points = [
-        {"date": k, "passed": v.get("PASS", 0), "failed": v.get("FAIL", 0)}
-        for k, v in sorted(pivot.items())
-    ]
-    return {"points": points}
-
-
-# ─────────────────────────────────────────────
-# DATASET GENERATOR
-# ─────────────────────────────────────────────
-
-@app.post("/dataset/generate", response_model=DatasetGenerateResponse, tags=["Dataset"])
-async def dataset_generate():
-    """
-    Trigger synthetic dataset generation.
-    Calls dataset_gen.py (Steve's module) if available.
-    """
-    if not _DATASET_GEN_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="dataset_gen.py not found. Steve needs to move generate_dataset.py here.",
-        )
-
+@app.get("/invoices", response_model=List[InvoiceResponse])
+async def list_invoices(db: AsyncSession = Depends(get_db)):
+    """List all uploaded invoices."""
     try:
-        files_created, count = generate_dataset()
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Dataset generation failed: {exc}")
+        result   = await db.execute(select(Invoice).order_by(Invoice.uploaded_at.desc()))
+        invoices = result.scalars().all()
+        return [
+            {
+                "id":          i.id,
+                "filename":    i.filename or "unknown",
+                "uploaded_at": i.uploaded_at.isoformat(),
+            }
+            for i in invoices
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list invoices: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to list invoices")
 
-    return {
-        "message": "Dataset generated successfully",
-        "files_created": files_created,
-        "invoice_count": count,
-    }
+
+# ─── Validate stored invoice against all saved rules ──────────────────────────
+
+@app.post("/invoices/{invoice_id}/validate")
+async def validate_stored_invoice(invoice_id: int, db: AsyncSession = Depends(get_db)):
+    """Run all saved rules against a stored invoice."""
+    try:
+        inv_result = await db.execute(select(Invoice).where(Invoice.id == invoice_id))
+        invoice    = inv_result.scalar_one_or_none()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        rule_result = await db.execute(select(Rule).order_by(Rule.id))
+        rules       = rule_result.scalars().all()
+        if not rules:
+            raise HTTPException(status_code=404, detail="No rules saved yet")
+
+        rule_list = [
+            {"id": r.id, "rule_text": r.rule_text, "parsed_json": r.parsed_json}
+            for r in rules
+        ]
+
+        # Run batch evaluation off event loop with timeout
+        try:
+            out = await asyncio.wait_for(
+                run_in_threadpool(evaluate_batch, rule_list, invoice.xml_content),
+                timeout=BATCH_VALIDATION_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail=f"Validation timeout ({BATCH_VALIDATION_TIMEOUT}s limit)")
+
+        # Store results
+        for r in out["results"]:
+            vr = ValidationResult(
+                invoice_id=invoice_id,
+                rule_id=r.get("rule_id"),
+                rule_text=r.get("rule_text", ""),
+                status=r.get("status", "ERROR"),
+                message=r.get("message", ""),
+                rule_type=r.get("rule_type"),
+            )
+            db.add(vr)
+        await db.commit()
+
+        return out
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Validation failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Validation failed")
+
+
+# ─── Results ──────────────────────────────────────────────────────────────────
+
+@app.get("/results")
+async def list_results(db: AsyncSession = Depends(get_db)):
+    """All validation results."""
+    try:
+        result  = await db.execute(
+            select(ValidationResult).order_by(ValidationResult.validated_at.desc()).limit(200)
+        )
+        results = result.scalars().all()
+        return [
+            {
+                "id":           r.id,
+                "invoice_id":   r.invoice_id,
+                "rule_id":      r.rule_id,
+                "rule_text":    r.rule_text,
+                "rule_type":    r.rule_type,
+                "status":       r.status,
+                "message":      r.message,
+                "validated_at": r.validated_at.isoformat(),
+            }
+            for r in results
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list results: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to list results")
+
+
+@app.get("/results/{invoice_id}")
+async def results_for_invoice(invoice_id: int, db: AsyncSession = Depends(get_db)):
+    """All results for one invoice. Returns 404 if none found."""
+    try:
+        result  = await db.execute(
+            select(ValidationResult).where(ValidationResult.invoice_id == invoice_id)
+        )
+        results = result.scalars().all()
+        if not results:
+            raise HTTPException(status_code=404, detail=f"No validation results found for invoice {invoice_id}")
+        return [
+            {
+                "id":         r.id,
+                "rule_text":  r.rule_text,
+                "rule_type":  r.rule_type,
+                "status":     r.status,
+                "message":    r.message,
+            }
+            for r in results
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get results: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to get results")
+
+
+# ─── Dashboard ────────────────────────────────────────────────────────────────
+
+@app.get("/dashboard/stats", response_model=DashboardStats)
+async def dashboard_stats(db: AsyncSession = Depends(get_db)):
+    """Get dashboard statistics."""
+    try:
+        total_rules = (await db.execute(select(func.count(Rule.id)))).scalar() or 0
+        total_inv   = (await db.execute(select(func.count(Invoice.id)))).scalar() or 0
+        total_val   = (await db.execute(select(func.count(ValidationResult.id)))).scalar() or 0
+        passed      = (await db.execute(
+            select(func.count(ValidationResult.id)).where(ValidationResult.status == "PASS")
+        )).scalar() or 0
+        failed      = (await db.execute(
+            select(func.count(ValidationResult.id)).where(ValidationResult.status == "FAIL")
+        )).scalar() or 0
+
+        pass_rate = round((passed / total_val * 100), 1) if total_val > 0 else 0.0
+
+        return {
+            "total_rules":       total_rules,
+            "total_invoices":    total_inv,
+            "total_validations": total_val,
+            "total_passed":      passed,
+            "total_failed":      failed,
+            "pass_rate":         pass_rate,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get stats: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to get stats")

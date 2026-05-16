@@ -1,0 +1,37 @@
+<Invoice>
+  <invoice_id/>
+  <issue_date>2026-03-23</issue_date>
+  <seller_name>Seller_17</seller_name>
+  <buyer_name>Buyer_13</buyer_name>
+  <currency_code>USD</currency_code>
+  <taxable_amount>6334.15</taxable_amount>
+  <tax_amount>760.1</tax_amount>
+  <payable_amount>7094.25</payable_amount>
+  <tax_category>Z</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>10</quantity>
+      <unit_price>732.44</unit_price>
+      <line_total>7324.4</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>7</quantity>
+      <unit_price>2144.04</unit_price>
+      <line_total>15008.28</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>8</quantity>
+      <unit_price>3195.73</unit_price>
+      <line_total>25565.84</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>3</quantity>
+      <unit_price>2796.82</unit_price>
+      <line_total>8390.46</line_total>
+    </item>
+  </line_items>
+</Invoice>

@@ -1,0 +1,43 @@
+<Invoice>
+  <invoice_id>INV-0050</invoice_id>
+  <issue_date>2027-10-02</issue_date>
+  <seller_name>Seller_4</seller_name>
+  <buyer_name>Buyer_19</buyer_name>
+  <currency_code>GBP</currency_code>
+  <taxable_amount>34883.66</taxable_amount>
+  <tax_amount>4186.04</tax_amount>
+  <payable_amount>39069.7</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>2</quantity>
+      <unit_price>2444.13</unit_price>
+      <line_total>4888.26</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>10</quantity>
+      <unit_price>4672.76</unit_price>
+      <line_total>46727.6</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>5</quantity>
+      <unit_price>2163.92</unit_price>
+      <line_total>10819.6</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>6</quantity>
+      <unit_price>1335.32</unit_price>
+      <line_total>8011.92</line_total>
+    </item>
+    <item>
+      <description>Item 5</description>
+      <quantity>10</quantity>
+      <unit_price>4975.37</unit_price>
+      <line_total>49753.7</line_total>
+    </item>
+  </line_items>
+</Invoice>

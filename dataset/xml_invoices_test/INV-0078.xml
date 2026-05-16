@@ -1,0 +1,43 @@
+<Invoice>
+  <invoice_id>INV-0078</invoice_id>
+  <issue_date>2026-03-22</issue_date>
+  <seller_name>Seller_6</seller_name>
+  <buyer_name>Buyer_11</buyer_name>
+  <currency_code>AED</currency_code>
+  <taxable_amount>12468.95</taxable_amount>
+  <tax_amount>3491.31</tax_amount>
+  <payable_amount>15960.26</payable_amount>
+  <tax_category>Z</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>1</quantity>
+      <unit_price>3380.37</unit_price>
+      <line_total>3380.37</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>2</quantity>
+      <unit_price>109.21</unit_price>
+      <line_total>218.42</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>2</quantity>
+      <unit_price>2650.06</unit_price>
+      <line_total>5300.12</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>8</quantity>
+      <unit_price>1790.01</unit_price>
+      <line_total>14320.08</line_total>
+    </item>
+    <item>
+      <description>Item 5</description>
+      <quantity>5</quantity>
+      <unit_price>1296.89</unit_price>
+      <line_total>6484.45</line_total>
+    </item>
+  </line_items>
+</Invoice>

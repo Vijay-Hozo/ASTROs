@@ -4,11 +4,19 @@ services:
     env: python
     region: oregon
     plan: free
+    rootDir: backend
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPEN_ROUTER_API_KEY
+        sync: false
+      - key: OPEN_ROUTER_MODEL
+        value: anthropic/claude-3.5-sonnet
       - key: FRONTEND_URL
         value: https://ps3-rule-engine.vercel.app
       - key: PORT
-        value: 8000
-    rootDir: backend
+        value: 10000
+      - key: DB_PATH
+        value: database.db

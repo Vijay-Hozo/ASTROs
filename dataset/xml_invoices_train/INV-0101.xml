@@ -1,0 +1,31 @@
+<Invoice>
+  <invoice_id/>
+  <issue_date>2026-01-20</issue_date>
+  <seller_name>Seller_15</seller_name>
+  <buyer_name>Buyer_12</buyer_name>
+  <currency_code>GBP</currency_code>
+  <taxable_amount>39036.51</taxable_amount>
+  <tax_amount>4684.38</tax_amount>
+  <payable_amount>43720.89</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>8</quantity>
+      <unit_price>3827.27</unit_price>
+      <line_total>30618.16</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>10</quantity>
+      <unit_price>731.59</unit_price>
+      <line_total>7315.9</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>6</quantity>
+      <unit_price>2020.27</unit_price>
+      <line_total>12121.62</line_total>
+    </item>
+  </line_items>
+</Invoice>

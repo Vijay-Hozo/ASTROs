@@ -1,0 +1,25 @@
+<Invoice>
+  <invoice_id>INV-0050</invoice_id>
+  <issue_date>2027-12-08</issue_date>
+  <seller_name>Seller_19</seller_name>
+  <buyer_name>Buyer_13</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>27819.91</taxable_amount>
+  <tax_amount>5563.98</tax_amount>
+  <payable_amount>33383.89</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>7</quantity>
+      <unit_price>266.05</unit_price>
+      <line_total>1862.35</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>8</quantity>
+      <unit_price>3540.88</unit_price>
+      <line_total>28327.04</line_total>
+    </item>
+  </line_items>
+</Invoice>

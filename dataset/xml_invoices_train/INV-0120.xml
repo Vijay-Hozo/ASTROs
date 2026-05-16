@@ -1,0 +1,37 @@
+<Invoice>
+  <invoice_id>INV-0120</invoice_id>
+  <issue_date>2027-11-08</issue_date>
+  <seller_name>Seller_2</seller_name>
+  <buyer_name>Buyer_4</buyer_name>
+  <currency_code>EUR</currency_code>
+  <taxable_amount>30976.01</taxable_amount>
+  <tax_amount>6195.2</tax_amount>
+  <payable_amount>37171.21</payable_amount>
+  <tax_category>Z</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>6</quantity>
+      <unit_price>3600.92</unit_price>
+      <line_total>21605.52</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>2</quantity>
+      <unit_price>3421.9</unit_price>
+      <line_total>6843.8</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>3</quantity>
+      <unit_price>75.65</unit_price>
+      <line_total>226.95</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>9</quantity>
+      <unit_price>4890.66</unit_price>
+      <line_total>44015.94</line_total>
+    </item>
+  </line_items>
+</Invoice>

@@ -1,0 +1,31 @@
+<Invoice>
+  <invoice_id>INV-0074</invoice_id>
+  <issue_date>2026-02-09</issue_date>
+  <seller_name>Seller_10</seller_name>
+  <buyer_name>Buyer_30</buyer_name>
+  <currency_code>GBP</currency_code>
+  <taxable_amount>1799.56</taxable_amount>
+  <tax_amount>503.88</tax_amount>
+  <payable_amount>2303.44</payable_amount>
+  <tax_category>S</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>6</quantity>
+      <unit_price>80.22</unit_price>
+      <line_total>481.32</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>3</quantity>
+      <unit_price>2853.29</unit_price>
+      <line_total>8559.87</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>7</quantity>
+      <unit_price>394.45</unit_price>
+      <line_total>2761.15</line_total>
+    </item>
+  </line_items>
+</Invoice>

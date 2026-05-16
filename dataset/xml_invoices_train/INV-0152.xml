@@ -1,0 +1,37 @@
+<Invoice>
+  <invoice_id>INV-0152</invoice_id>
+  <issue_date>2026-02-09</issue_date>
+  <seller_name>Seller_10</seller_name>
+  <buyer_name>Buyer_9</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>28812.04</taxable_amount>
+  <tax_amount>2593.08</tax_amount>
+  <payable_amount>31405.12</payable_amount>
+  <tax_category>Z</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>3</quantity>
+      <unit_price>363.17</unit_price>
+      <line_total>1089.51</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>7</quantity>
+      <unit_price>1416.01</unit_price>
+      <line_total>9912.07</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>5</quantity>
+      <unit_price>2446.95</unit_price>
+      <line_total>12234.75</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>2</quantity>
+      <unit_price>1837.57</unit_price>
+      <line_total>3675.14</line_total>
+    </item>
+  </line_items>
+</Invoice>

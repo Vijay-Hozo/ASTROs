@@ -1,0 +1,19 @@
+<Invoice>
+  <invoice_id>INV-0081</invoice_id>
+  <issue_date>2027-06-12</issue_date>
+  <seller_name>Seller_5</seller_name>
+  <buyer_name>Buyer_8</buyer_name>
+  <currency_code>EUR</currency_code>
+  <taxable_amount>17305.91</taxable_amount>
+  <tax_amount>2076.71</tax_amount>
+  <payable_amount>19382.62</payable_amount>
+  <tax_category>S</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>3</quantity>
+      <unit_price>1317.04</unit_price>
+      <line_total>3951.12</line_total>
+    </item>
+  </line_items>
+</Invoice>

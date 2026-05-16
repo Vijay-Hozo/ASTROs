@@ -1,0 +1,38 @@
+<Invoice>
+  <invoice_id/>
+  <issue_date>2026-04-10</issue_date>
+  <seller_name>Seller_2</seller_name>
+  <buyer_name>Buyer_18</buyer_name>
+  <currency_code>EUR</currency_code>
+  <taxable_amount>13518.2</taxable_amount>
+  <tax_amount>2703.64</tax_amount>
+  <payable_amount>16221.84</payable_amount>
+  <tax_category>E</tax_category>
+  <tax_exemption_reason>VATEX-EU-AE</tax_exemption_reason>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>4</quantity>
+      <unit_price>3456.61</unit_price>
+      <line_total>13826.44</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>8</quantity>
+      <unit_price>1686.49</unit_price>
+      <line_total>13491.92</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>1</quantity>
+      <unit_price>113.11</unit_price>
+      <line_total>113.11</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>2</quantity>
+      <unit_price>4539.06</unit_price>
+      <line_total>9078.12</line_total>
+    </item>
+  </line_items>
+</Invoice>

@@ -1,0 +1,19 @@
+<Invoice>
+  <invoice_id>INV-0067</invoice_id>
+  <issue_date>2026-01-24</issue_date>
+  <seller_name/>
+  <buyer_name>Buyer_15</buyer_name>
+  <currency_code>AED</currency_code>
+  <taxable_amount>29886.47</taxable_amount>
+  <tax_amount>5379.56</tax_amount>
+  <payable_amount>35266.03</payable_amount>
+  <tax_category>Z</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>1</quantity>
+      <unit_price>4993.0</unit_price>
+      <line_total>4993.0</line_total>
+    </item>
+  </line_items>
+</Invoice>
