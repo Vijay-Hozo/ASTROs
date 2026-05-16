@@ -22,8 +22,8 @@ export default function ParsedRuleCard() {
 
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="inline-flex items-center gap-2 font-semibold text-[#07122F]">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-[#07122F] inline-flex items-center gap-2">
           <FileJson2 className="h-4 w-4 text-[#432EF1]" />
           2. Parsed Rule (Structured)
         </h3>
@@ -36,7 +36,7 @@ export default function ParsedRuleCard() {
         </button>
       </div>
       <pre className="overflow-auto rounded-xl border border-slate-200 bg-[#0f172a] p-4 text-xs leading-6">
-        <code className="whitespace-pre text-slate-200">{parsedRule}</code>
+        <code className="text-slate-200 whitespace-pre">{parsedRule}</code>
       </pre>
     </section>
   );

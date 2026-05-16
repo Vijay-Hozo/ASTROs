@@ -80,28 +80,28 @@ export default function DashboardShell() {
         <Header onOpenSidebar={() => setMobileOpen(true)} />
 
         <main className="p-4 md:p-6">
-          <div className="max-w-[1440px] mx-auto space-y-6">
+          <div className="mx-auto max-w-[1440px] space-y-6">
             <motion.section
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4"
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
             >
               {stats.map((item) => (
                 <StatsCard key={item.title} {...item} />
               ))}
             </motion.section>
 
-            <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-              <div className="xl:col-span-8 space-y-6">
+            <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+              <div className="space-y-6 xl:col-span-8">
                 <RuleInput />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                   <ParsedRuleCard />
                   <ValidationLogicCard />
                 </div>
                 <ValidationTable />
               </div>
 
-              <div className="xl:col-span-4 space-y-6">
+              <div className="space-y-6 xl:col-span-4">
                 <UploadCard />
                 <SummaryCard />
                 <XmlPreview />
