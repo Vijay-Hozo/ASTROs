@@ -1,0 +1,238 @@
+"""
+schemas.py - Pydantic request and response models for the PS-3 Rule Engine API.
+All input validation and output serialization goes through these models.
+"""
+
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Any
+from datetime import datetime
+
+
+# ─────────────────────────────────────────────
+# REQUEST MODELS
+# ─────────────────────────────────────────────
+
+class ValidateRequest(BaseModel):
+    """Single rule + single XML invoice validation."""
+    rule_text: str = Field(..., min_length=5, description="Natural language rule in plain English")
+    xml_content: str = Field(..., min_length=10, description="Raw XML invoice string")
+
+    @field_validator("rule_text")
+    @classmethod
+    def rule_text_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("rule_text cannot be blank")
+        return v.strip()
+
+    @field_validator("xml_content")
+    @classmethod
+    def xml_content_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("xml_content cannot be blank")
+        return v.strip()
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "rule_text": "Tax amount must be greater than 0",
+                "xml_content": "<Invoice><InvoiceID>INV-001</InvoiceID><TaxAmount>180</TaxAmount></Invoice>"
+            }
+        }
+    }
+
+
+class ValidateBatchRequest(BaseModel):
+    """Single rule validated against multiple XML invoices."""
+    rule_text: str = Field(..., min_length=5, description="Natural language rule in plain English")
+    xml_files: List[str] = Field(..., min_length=1, description="List of raw XML invoice strings")
+
+    @field_validator("rule_text")
+    @classmethod
+    def rule_text_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("rule_text cannot be blank")
+        return v.strip()
+
+    @field_validator("xml_files")
+    @classmethod
+    def xml_files_not_empty(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("xml_files list cannot be empty")
+        stripped = [x.strip() for x in v if x.strip()]
+        if not stripped:
+            raise ValueError("All xml_files entries are empty")
+        return stripped
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "rule_text": "Seller name is required",
+                "xml_files": [
+                    "<Invoice><SellerName>ABC Ltd</SellerName></Invoice>",
+                    "<Invoice></Invoice>"
+                ]
+            }
+        }
+    }
+
+
+class SaveRuleRequest(BaseModel):
+    """Persist a natural-language rule to the database."""
+    rule_text: str = Field(..., min_length=5, description="Natural language rule in plain English")
+    severity: str = Field(default="medium", description="Rule severity: low | medium | high | critical")
+
+    @field_validator("severity")
+    @classmethod
+    def severity_valid(cls, v: str) -> str:
+        allowed = {"low", "medium", "high", "critical"}
+        v = v.lower().strip()
+        if v not in allowed:
+            raise ValueError(f"severity must be one of {sorted(allowed)}")
+        return v
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "rule_text": "Payable amount must equal taxable amount plus tax amount",
+                "severity": "high"
+            }
+        }
+    }
+
+
+class BatchEvaluateRequest(BaseModel):
+    """Evaluate all saved rules against a single XML invoice."""
+    xml_content: str = Field(..., min_length=10, description="Raw XML invoice string")
+
+    @field_validator("xml_content")
+    @classmethod
+    def xml_content_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("xml_content cannot be blank")
+        return v.strip()
+
+
+# ─────────────────────────────────────────────
+# RESPONSE MODELS
+# ─────────────────────────────────────────────
+
+class ParsedRule(BaseModel):
+    """The structured JSON produced by the rule parser."""
+    rule_type: str
+    field: Optional[str] = None
+    operation: Optional[str] = None
+    base_field: Optional[str] = None
+    value: Optional[Any] = None
+    condition_field: Optional[str] = None
+    condition_value: Optional[str] = None
+    extra: Optional[dict] = None
+
+
+class ValidationResult(BaseModel):
+    """Result of a single rule validation against one XML invoice."""
+    rule_id: Optional[int] = None
+    rule_text: str
+    parsed_rule: Optional[ParsedRule] = None
+    result: str = Field(..., description="PASS or FAIL or ERROR")
+    message: Optional[str] = None
+    invoice_id: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "rule_id": None,
+                "rule_text": "Tax amount must be greater than 0",
+                "parsed_rule": {
+                    "rule_type": "numeric_comparison",
+                    "field": "tax_amount",
+                    "operation": "greater_than",
+                    "value": 0
+                },
+                "result": "PASS",
+                "message": "tax_amount = 180.0 is greater than 0",
+                "invoice_id": "INV-001"
+            }
+        }
+    }
+
+
+class BatchSummary(BaseModel):
+    """Summary statistics for a batch validation run."""
+    total: int
+    passed: int
+    failed: int
+    errors: int
+
+
+class BatchValidationResponse(BaseModel):
+    """Response for /validate/batch."""
+    results: List[ValidationResult]
+    summary: BatchSummary
+
+
+class SavedRuleResponse(BaseModel):
+    """A rule as stored in the database."""
+    id: int
+    rule_text: str
+    parsed_json: Optional[dict] = None
+    severity: str
+    created_at: str
+
+
+class InvoiceResponse(BaseModel):
+    """A stored invoice record."""
+    id: int
+    filename: str
+    uploaded_at: str
+    validation_status: Optional[str] = None
+
+
+class ResultRecord(BaseModel):
+    """A single stored validation result record."""
+    id: int
+    invoice_id: int
+    rule_id: int
+    status: str
+    message: Optional[str] = None
+
+
+class DashboardStats(BaseModel):
+    """Aggregated stats for the dashboard stat cards."""
+    total_rules: int
+    total_invoices: int
+    total_validations: int
+    total_passed: int
+    total_failed: int
+    pass_rate: float = Field(..., description="Percentage 0-100")
+
+
+class TrendPoint(BaseModel):
+    """A single data point for the trend chart."""
+    date: str
+    passed: int
+    failed: int
+
+
+class TrendResponse(BaseModel):
+    """Trend data for the dashboard chart."""
+    points: List[TrendPoint]
+
+
+class HealthResponse(BaseModel):
+    """System health check."""
+    status: str
+    version: str
+    timestamp: str
+
+
+class DatasetGenerateResponse(BaseModel):
+    """Response after generating synthetic dataset."""
+    message: str
+    files_created: List[str]
+    invoice_count: int
+
+
+class DeleteResponse(BaseModel):
+    """Generic delete confirmation."""
+    message: str
+    id: int
