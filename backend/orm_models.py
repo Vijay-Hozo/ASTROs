@@ -6,10 +6,10 @@ Used with SQLAlchemy AsyncSession for async database operations.
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 import os
 
 # ── Database URL ──────────────────────────────────────────────────────────────
@@ -33,17 +33,18 @@ Base = declarative_base()
 class Rule(Base):
     """Stored natural-language rules parsed and persisted by users."""
     __tablename__ = "rules"
+    __allow_unmapped__ = True
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    rule_text = Column(Text, nullable=False, doc="Original natural language rule")
-    parsed_json = Column(Text, nullable=False, doc="Parsed JSON representation")
-    rule_type = Column(String(50), nullable=True, doc="Type of rule (e.g., required_field)")
-    severity = Column(String(20), default="error", doc="Severity level")
-    created_at = Column(DateTime, default=datetime.utcnow, doc="Timestamp of rule creation")
+    id: Mapped[int] = mapped_column(primary_key=True)
+    rule_text: Mapped[str]
+    parsed_json: Mapped[str]
+    rule_type: Mapped[Optional[str]] = mapped_column(default=None)
+    severity: Mapped[str] = mapped_column(default="error")
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     # Relationships
-    validation_results: List["ValidationResult"] = relationship(
-        "ValidationResult", back_populates="rule", cascade="all, delete-orphan"
+    validation_results: Mapped[List["ValidationResult"]] = relationship(
+        back_populates="rule", cascade="all, delete-orphan"
     )
 
     def __repr__(self):
@@ -53,15 +54,16 @@ class Rule(Base):
 class Invoice(Base):
     """Uploaded or provided invoice XML documents."""
     __tablename__ = "invoices"
+    __allow_unmapped__ = True
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    filename = Column(String(255), nullable=True, doc="Original filename if uploaded")
-    xml_content = Column(Text, nullable=False, doc="Raw XML invoice content")
-    uploaded_at = Column(DateTime, default=datetime.utcnow, doc="Timestamp of upload/creation")
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filename: Mapped[Optional[str]] = mapped_column(default=None)
+    xml_content: Mapped[str]
+    uploaded_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     # Relationships
-    validation_results: List["ValidationResult"] = relationship(
-        "ValidationResult", back_populates="invoice", cascade="all, delete-orphan"
+    validation_results: Mapped[List["ValidationResult"]] = relationship(
+        back_populates="invoice", cascade="all, delete-orphan"
     )
 
     def __repr__(self):
@@ -71,19 +73,20 @@ class Invoice(Base):
 class ValidationResult(Base):
     """Results of running a rule against an invoice."""
     __tablename__ = "validation_results"
+    __allow_unmapped__ = True
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
-    rule_id = Column(Integer, ForeignKey("rules.id"), nullable=True)
-    rule_text = Column(Text, nullable=False, doc="Rule text for reference")
-    status = Column(String(20), nullable=False, doc="PASS / FAIL / ERROR / SKIP")
-    message = Column(Text, doc="Explanation of result")
-    rule_type = Column(String(50), nullable=True, doc="Type of validation")
-    validated_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id"), default=None)
+    rule_id: Mapped[Optional[int]] = mapped_column(ForeignKey("rules.id"), default=None)
+    rule_text: Mapped[str]
+    status: Mapped[str]
+    message: Mapped[Optional[str]] = mapped_column(default=None)
+    rule_type: Mapped[Optional[str]] = mapped_column(default=None)
+    validated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     # Relationships
-    invoice = relationship("Invoice", back_populates="validation_results")
-    rule = relationship("Rule", back_populates="validation_results")
+    invoice: Mapped[Optional["Invoice"]] = relationship(back_populates="validation_results")
+    rule: Mapped[Optional["Rule"]] = relationship(back_populates="validation_results")
 
     def __repr__(self):
         return f"<ValidationResult(id={self.id}, status={self.status})>"
