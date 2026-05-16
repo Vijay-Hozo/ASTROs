@@ -185,3 +185,24 @@ if __name__ == "__main__":
             print(f"  {k:<25} {v}{flag}")
 
     print("\n✅ XML Reader ready — returns clean dict for executor")
+
+
+# ── Helper class for evaluator integration ────────────────────────────────────
+
+class XMLReader:
+    """Class-based wrapper for XML parsing to support evaluator.py integration."""
+    
+    def extract(self, xml_content: str) -> dict:
+        """Extract fields from XML content.
+        
+        Args:
+            xml_content: Raw XML string or file path
+            
+        Returns:
+            Dictionary of extracted invoice fields
+        """
+        return parse_invoice_xml(xml_content)
+    
+    def parse(self, xml_content: str) -> dict:
+        """Alias for extract() for compatibility."""
+        return self.extract(xml_content)
