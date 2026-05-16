@@ -1,9 +1,10 @@
 """
 XML Reader — parses an invoice XML file or string into a clean Python dict.
 The executor will consume this dict to run rules against.
+Uses defusedxml to prevent XXE attacks and other XML vulnerabilities.
 """
 
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
 from datetime import datetime
 from typing import Optional
 
@@ -13,21 +14,43 @@ def parse_invoice_xml(source: str) -> dict:
     Accepts either:
       - A file path string ending in .xml
       - A raw XML string
-
+    
+    Safely parses XML using defusedxml to prevent XXE and other vulnerabilities.
     Returns a clean dict with all invoice fields.
     Missing fields return None — executor handles None safely.
     """
     try:
-        if source.strip().startswith("<"):
-            root = ET.fromstring(source)
+        # Detect if input is XML content or file path
+        source_str = source.strip()
+        if source_str.startswith("<"):
+            # Direct XML string
+            root = ET.fromstring(source_str)
         else:
-            tree = ET.parse(source)
-            root = tree.getroot()
+            # File path
+            try:
+                tree = ET.parse(source)
+                root = tree.getroot()
+            except FileNotFoundError:
+                return {"_parse_error": f"File not found: {source}"}
     except ET.ParseError as e:
-        return {"_parse_error": str(e)}
+        return {"_parse_error": f"XML parse error: {str(e)[:100]}"}
+    except ValueError as e:
+        return {"_parse_error": f"Invalid XML content: {str(e)[:100]}"}
+    except Exception as e:
+        return {"_parse_error": f"XML processing error: {str(e)[:100]}"}
 
     def get(tag: str) -> Optional[str]:
+        """Safe tag getter with namespace support."""
         el = root.find(tag)
+        if el is None:
+            # Try with common namespaces
+            for ns in ["{urn:oasis:names:specification:ubl:schema:xsd:Invoice-2}", 
+                       "{urn:un:unece:uncefact:data:standard:UnqualifiedDataTypes:100}",
+                       ""]:
+                el = root.find(f"{ns}{tag}")
+                if el is not None:
+                    break
+        
         if el is None:
             return None
         text = el.text
@@ -48,10 +71,10 @@ def parse_invoice_xml(source: str) -> dict:
         val = get(tag)
         if val is None:
             return None
-        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S"):
             try:
-                return datetime.strptime(val, fmt)
-            except ValueError:
+                return datetime.strptime(val.split("T")[0], fmt)  # Handle ISO format
+            except (ValueError, AttributeError):
                 continue
         return None  # unparseable date
 

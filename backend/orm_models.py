@@ -3,6 +3,7 @@ orm_models.py - SQLAlchemy ORM models for the PS-3 Rule Engine.
 
 These are the database entity models (different from models.py which are Pydantic models).
 Used with SQLAlchemy AsyncSession for async database operations.
+Features proper lifecycle management and cascade configurations.
 """
 
 from datetime import datetime
@@ -16,8 +17,13 @@ import os
 DB_PATH = os.getenv("DB_PATH", "database.db")
 DB_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
-# Create async engine
-engine = create_async_engine(DB_URL, echo=False)
+# Create async engine with proper pool configuration
+engine = create_async_engine(
+    DB_URL,
+    echo=False,
+    pool_pre_ping=True,  # Test connections before using them
+    pool_recycle=3600,   # Recycle connections after 1 hour
+)
 
 # Session factory for async context managers
 AsyncSessionLocal = async_sessionmaker(
@@ -76,8 +82,8 @@ class ValidationResult(Base):
     __allow_unmapped__ = True
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id"), default=None)
-    rule_id: Mapped[Optional[int]] = mapped_column(ForeignKey("rules.id"), default=None)
+    invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id", ondelete="CASCADE"), default=None)
+    rule_id: Mapped[Optional[int]] = mapped_column(ForeignKey("rules.id", ondelete="CASCADE"), default=None)
     rule_text: Mapped[str]
     status: Mapped[str]
     message: Mapped[Optional[str]] = mapped_column(default=None)
@@ -102,9 +108,18 @@ async def init_db():
 
 
 async def get_db():
-    """FastAPI dependency for getting an async database session."""
+    """FastAPI dependency for getting an async database session.
+    
+    Ensures proper session lifecycle:
+    - Session created for each request
+    - Auto-rollback on errors
+    - Always closed properly
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
+        except Exception:
+            await session.rollback()
+            raise
         finally:
             await session.close()
