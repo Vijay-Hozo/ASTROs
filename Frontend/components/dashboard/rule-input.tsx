@@ -10,11 +10,11 @@ import type { SingleValidationResponse, ValidateRequest } from "@/lib/types";
 interface RuleInputProps {
   onValidationResult?: (result: SingleValidationResponse) => void;
   onXmlRequired?: () => void;
+  xmlContent?: string;
 }
 
-export default function RuleInput({ onValidationResult, onXmlRequired }: RuleInputProps) {
+export default function RuleInput({ onValidationResult, onXmlRequired, xmlContent }: RuleInputProps) {
   const [rule, setRule] = useState("");
-  const [xmlContent, setXmlContent] = useState("");
 
   const { mutate: validateRule, isLoading: isValidating, error } = useMutate<SingleValidationResponse>(
     "/validate",
@@ -31,9 +31,9 @@ export default function RuleInput({ onValidationResult, onXmlRequired }: RuleInp
       return;
     }
 
-    if (!xmlContent.trim()) {
+    if (!xmlContent?.trim()) {
       onXmlRequired?.();
-      alert("Please provide XML content to test against. Use the XML Preview panel.");
+      alert("Please provide XML content to test against. Use the XML Preview panel on the right.");
       return;
     }
 

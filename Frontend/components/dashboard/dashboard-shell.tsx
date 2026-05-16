@@ -22,13 +22,32 @@ import XmlPreview from "./xml-preview";
 import { useApiData } from "@/lib/hooks";
 import { ErrorAlert } from "../ui/error-alert";
 import { StatsCardLoadingSkeleton } from "../ui/loading-skeleton";
-import type { DashboardStats } from "@/lib/types";
+import type { DashboardStats, SingleValidationResponse, InvoiceValidationResponse } from "@/lib/types";
 
 export default function DashboardShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [xmlContent, setXmlContent] = useState("");
+  const [validationResult, setValidationResult] = useState<SingleValidationResponse | null>(null);
+  const [invoiceValidationResult, setInvoiceValidationResult] = useState<InvoiceValidationResponse | null>(null);
+  const [uploadedInvoiceId, setUploadedInvoiceId] = useState<number | null>(null);
+  const [refreshStats, setRefreshStats] = useState(false);
+
   const { data: dashboardStats, isLoading, error, refetch } = useApiData<DashboardStats>("/dashboard/stats", {
     refetchInterval: 60000, // Refetch every 60 seconds
   });
+
+  // Refresh stats when invoice is uploaded or validated
+  const handleUploadSuccess = (invoiceId: number) => {
+    setUploadedInvoiceId(invoiceId);
+    setRefreshStats((s) => !s);
+    refetch();
+  };
+
+  const handleValidationSuccess = (result: InvoiceValidationResponse) => {
+    setInvoiceValidationResult(result);
+    setRefreshStats((s) => !s);
+    refetch();
+  };
 
   const stats = useMemo(() => {
     if (!dashboardStats) {
@@ -143,9 +162,7 @@ export default function DashboardShell() {
 
         <main className="p-4 md:p-6">
           <div className="mx-auto max-w-[1440px] space-y-6">
-            {error && (
-              <ErrorAlert error={error} onRetry={refetch} />
-            )}
+            {error && <ErrorAlert error={error} onRetry={refetch} />}
 
             {isLoading ? (
               <StatsCardLoadingSkeleton />
@@ -163,18 +180,25 @@ export default function DashboardShell() {
 
             <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
               <div className="space-y-6 xl:col-span-8">
-                <RuleInput />
+                <RuleInput
+                  xmlContent={xmlContent}
+                  onValidationResult={setValidationResult}
+                  onXmlRequired={() => {}} // Can add custom handling here
+                />
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  <ParsedRuleCard />
+                  <ParsedRuleCard result={validationResult} />
                   <ValidationLogicCard />
                 </div>
                 <ValidationTable />
               </div>
 
               <div className="space-y-6 xl:col-span-4">
-                <UploadCard />
+                <UploadCard
+                  onUploadSuccess={handleUploadSuccess}
+                  onValidationSuccess={handleValidationSuccess}
+                />
                 <SummaryCard />
-                <XmlPreview />
+                <XmlPreview value={xmlContent} onChange={setXmlContent} />
               </div>
             </section>
           </div>
