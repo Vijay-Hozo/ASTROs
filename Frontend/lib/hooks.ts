@@ -25,12 +25,23 @@ export function useApiData<T>(
   options: UseApiDataOptions = {}
 ) {
   const [data, setData] = useState<T | null>(null);
-  const [isLoading, setIsLoading] = useState(!!endpoint && !options.skip);
+  const [isLoading, setIsLoading] = useState<boolean>(!!endpoint && !options.skip);
   const [error, setError] = useState<APIError | null>(null);
-  const refetchIntervalRef = useRef<NodeJS.Timeout>();
+  const refetchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Extract callback refs to avoid dependency loops
+  const onSuccessRef = useRef(options.onSuccess);
+  const onErrorRef = useRef(options.onError);
+  const skipRef = useRef(options.skip);
+  
+  useEffect(() => {
+    onSuccessRef.current = options.onSuccess;
+    onErrorRef.current = options.onError;
+    skipRef.current = options.skip;
+  }, [options.onSuccess, options.onError, options.skip]);
 
   const fetchData = useCallback(async () => {
-    if (!endpoint || options.skip) {
+    if (!endpoint || skipRef.current) {
       setData(null);
       setIsLoading(false);
       return;
@@ -41,15 +52,15 @@ export function useApiData<T>(
       setError(null);
       const result = await apiClient.get<T>(endpoint);
       setData(result);
-      options.onSuccess?.(result);
+      onSuccessRef.current?.(result);
     } catch (err) {
       const apiError = err as APIError;
       setError(apiError);
-      options.onError?.(apiError);
+      onErrorRef.current?.(apiError);
     } finally {
       setIsLoading(false);
     }
-  }, [endpoint, options]);
+  }, [endpoint]);
 
   useEffect(() => {
     fetchData();
@@ -79,6 +90,22 @@ export interface UseMutateOptions<T> {
 
 export interface UseMutateResult<T> {
   mutate: (body: unknown) => Promise<T>;
+  isLoading: boolean;
+  error: APIError | null;
+  data: T | null;
+  reset: () => void;
+}
+
+export interface UseUploadFileResult<T> {
+  mutate: (file: File) => Promise<T>;
+  isLoading: boolean;
+  error: APIError | null;
+  data: T | null;
+  reset: () => void;
+}
+
+export interface UseDeleteResult<T> {
+  mutate: (endpoint: string) => Promise<T | null>;
   isLoading: boolean;
   error: APIError | null;
   data: T | null;
@@ -129,20 +156,22 @@ export function useMutate<T>(
 
 export function useDelete<T = null>(
   options: UseMutateOptions<T> = {}
-): UseMutateResult<T> {
+): UseDeleteResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<APIError | null>(null);
 
   const mutate = useCallback(
-    async (endpoint: string): Promise<T> => {
+    async (endpoint: string): Promise<T | null> => {
       try {
         setIsLoading(true);
         setError(null);
         const result = await apiClient.delete<T>(endpoint);
         setData(result);
-        options.onSuccess?.(result as T);
-        return result as T;
+        if (result) {
+          options.onSuccess?.(result);
+        }
+        return result;
       } catch (err) {
         const apiError = err as APIError;
         setError(apiError);
@@ -171,7 +200,7 @@ export function useDelete<T = null>(
 export function useUploadFile<T>(
   endpoint: string,
   options: UseMutateOptions<T> = {}
-): UseMutateResult<T> {
+): UseUploadFileResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<APIError | null>(null);

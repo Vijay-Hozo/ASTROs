@@ -27,14 +27,15 @@ function Card({
 }
 
 export default function SummaryCards() {
-  const { data: results = [], isLoading } = useApiData<ValidationResult[]>("/results");
+  const { data: results, isLoading } = useApiData<ValidationResult[]>("/results");
+  const resultsList = results || [];
 
   if (isLoading) return <StatsCardLoadingSkeleton />;
 
-  const total = results.length;
-  const passed = results.filter((r) => r.status === "PASS").length;
-  const failed = results.filter((r) => r.status === "FAIL").length;
-  const errors = results.filter((r) => r.status === "ERROR").length;
+  const total = resultsList.length;
+  const passed = resultsList.filter((r) => r.status === "PASS").length;
+  const failed = resultsList.filter((r) => r.status === "FAIL").length;
+  const errors = resultsList.filter((r) => r.status === "ERROR").length;
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">

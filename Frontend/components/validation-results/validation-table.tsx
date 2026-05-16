@@ -15,18 +15,19 @@ export default function ValidationTable({
   isLoading?: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const { data: results = [], isLoading, error, refetch } = useApiData<ValidationResult[]>("/results");
+  const { data: results, isLoading, error, refetch } = useApiData<ValidationResult[]>("/results");
+  const resultsList = results || [];
 
   const filtered = useMemo(() => {
-    if (!query || results.length === 0) return results;
+    if (!query || resultsList.length === 0) return resultsList;
     const q = query.toLowerCase();
-    return results.filter(
+    return resultsList.filter(
       (r) =>
         r.invoice_id.toString().includes(q) ||
         r.id.toString().includes(q) ||
         r.status.toLowerCase().includes(q)
     );
-  }, [results, query]);
+  }, [resultsList, query]);
 
   if (isLoading || parentLoading) return <TableLoadingSkeleton />;
 
@@ -38,7 +39,7 @@ export default function ValidationTable({
     );
   }
 
-  if (results.length === 0) {
+  if (resultsList.length === 0) {
     return (
       <div className="rounded-xl bg-white p-4 shadow-sm text-center py-12">
         <p className="text-slate-500">No validation results yet.</p>
@@ -62,7 +63,7 @@ export default function ValidationTable({
   return (
     <div className="rounded-xl bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm font-semibold">Validation Results ({results.length})</div>
+        <div className="text-sm font-semibold">Validation Results ({resultsList.length})</div>
         <div>
           <input
             value={query}

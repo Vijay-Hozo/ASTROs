@@ -32,9 +32,12 @@ export default function DashboardShell() {
   const [uploadedInvoiceId, setUploadedInvoiceId] = useState<number | null>(null);
   const [refreshStats, setRefreshStats] = useState(false);
 
-  const { data: dashboardStats, isLoading, error, refetch } = useApiData<DashboardStats>("/dashboard/stats", {
+  // Memoize options to prevent infinite loops
+  const dashboardOptions = useMemo(() => ({
     refetchInterval: 60000, // Refetch every 60 seconds
-  });
+  }), []);
+
+  const { data: dashboardStats, isLoading, error, refetch } = useApiData<DashboardStats>("/dashboard/stats", dashboardOptions);
 
   // Refresh stats when invoice is uploaded or validated
   const handleUploadSuccess = (invoiceId: number) => {

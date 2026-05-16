@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Play, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { useUploadFile, useMutate } from "@/lib/hooks";
+import { apiClient } from "@/lib/api-client";
+import type { APIError } from "@/lib/api-client";
 import { ErrorAlert } from "../ui/error-alert";
 import type { UploadInvoiceResponse, InvoiceValidationResponse } from "@/lib/types";
 
@@ -16,6 +18,8 @@ export default function UploadCard({ onUploadSuccess, onValidationSuccess }: Upl
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedInvoice, setUploadedInvoice] = useState<UploadInvoiceResponse | null>(null);
+  const [validateError, setValidateError] = useState<APIError | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   // Upload file mutation
   const { mutate: uploadFile, isLoading: isUploading, error: uploadError } = useUploadFile<UploadInvoiceResponse>(
@@ -24,16 +28,6 @@ export default function UploadCard({ onUploadSuccess, onValidationSuccess }: Upl
       onSuccess: (result) => {
         setUploadedInvoice(result);
         onUploadSuccess?.(result.id);
-      },
-    }
-  );
-
-  // Validate invoice mutation
-  const { mutate: validateInvoice, isLoading: isValidating, error: validateError } = useMutate<InvoiceValidationResponse>(
-    "",
-    {
-      onSuccess: (result) => {
-        onValidationSuccess?.(result);
       },
     }
   );
@@ -75,9 +69,19 @@ export default function UploadCard({ onUploadSuccess, onValidationSuccess }: Upl
     }
 
     try {
-      await validateInvoice(`/invoices/${uploadedInvoice.id}/validate`, {});
-    } catch (err) {
-      console.error("Validation failed:", err);
+      setIsValidating(true);
+      setValidateError(null);
+      const result = await apiClient.post<InvoiceValidationResponse>(
+        `/invoices/${uploadedInvoice.id}/validate`,
+        {}
+      );
+      onValidationSuccess?.(result);
+    } catch (err: unknown) {
+      const error = err as APIError;
+      setValidateError(error);
+      console.error("Validation failed:", error);
+    } finally {
+      setIsValidating(false);
     }
   };
 

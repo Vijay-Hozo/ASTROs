@@ -26,7 +26,8 @@ export default function RulesLibraryClient() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Fetch rules
-  const { data: rules = [], isLoading, error, refetch } = useApiData<Rule[]>("/rules");
+  const { data: rules, isLoading, error, refetch } = useApiData<Rule[]>("/rules");
+  const rulesList = rules || [];
 
   // Create rule mutation
   const { mutate: createRule, isLoading: isCreating, error: createError } = useMutate<CreateRuleResponse>(
@@ -125,7 +126,7 @@ export default function RulesLibraryClient() {
               />
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {rules.map((r) => (
+                {rulesList.map((r) => (
                   <RuleCard key={r.id} rule={r} onClick={() => setSelected(r)} />
                 ))}
               </div>

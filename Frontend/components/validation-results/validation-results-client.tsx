@@ -16,9 +16,10 @@ export default function ValidationResultsClient() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [selected, setSelected] = useState<ValidationResult | null>(null);
 
-  const { data: results = [], isLoading, error, refetch } = useApiData<ValidationResult[]>("/results");
+  const { data: results, isLoading, error, refetch } = useApiData<ValidationResult[]>("/results");
+  const resultsList = results || [];
 
-  const hasResults = results.length > 0;
+  const hasResults = resultsList.length > 0;
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8faff_0%,#f4f7ff_42%,#eef3fb_100%)] text-slate-900">
