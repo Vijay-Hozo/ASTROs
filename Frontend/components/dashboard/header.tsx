@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { motion } from "framer-motion";
@@ -38,10 +39,10 @@ export default function Header({
             <BookOpen className="h-4 w-4" />
             Documentation
           </motion.button>
-          <motion.button whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300 hover:shadow-sm">
+          {/* <motion.button whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300 hover:shadow-sm">
             <LibraryBig className="h-4 w-4" />
             Rules Library
-          </motion.button>
+          </motion.button> */}
           <button
             className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:shadow-sm"
             aria-label="Notifications"

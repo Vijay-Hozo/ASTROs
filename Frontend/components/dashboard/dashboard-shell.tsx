@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
@@ -298,7 +299,24 @@ export default function DashboardShell() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const filesArray = Array.from(e.target.files);
-    setUploadedFiles(filesArray);
+    const nonEmptyFiles = filesArray.filter((file) => file.size > 0);
+
+    if (nonEmptyFiles.length === 0) {
+      setToast({
+        message: "Empty XML files are not accepted. Please upload at least one non-empty XML file.",
+        type: "error",
+      });
+      return;
+    }
+
+    setUploadedFiles(nonEmptyFiles);
+    setToast({
+      message:
+        nonEmptyFiles.length === filesArray.length
+          ? `${nonEmptyFiles.length} XML file${nonEmptyFiles.length === 1 ? "" : "s"} uploaded successfully`
+          : `${nonEmptyFiles.length} XML file${nonEmptyFiles.length === 1 ? "" : "s"} uploaded successfully; skipped ${filesArray.length - nonEmptyFiles.length} empty file${filesArray.length - nonEmptyFiles.length === 1 ? "" : "s"}`,
+      type: "success",
+    });
     
     // Set initial preview file
     if (filesArray.length > 1) {
@@ -338,6 +356,8 @@ export default function DashboardShell() {
     setIsValidating(true);
     setValidationResults([]);
     setExpandedFiles({});
+    let skippedEmptyFiles = 0;
+    let validatedFiles = 0;
     
     try {
       for (let i = 0; i < uploadedFiles.length; i++) {
@@ -345,6 +365,12 @@ export default function DashboardShell() {
         setProgressText(`Validating ${i + 1} of ${uploadedFiles.length}...`);
         
         const xmlText = await file.text();
+        if (!xmlText.trim()) {
+          skippedEmptyFiles += 1;
+          continue;
+        }
+
+        validatedFiles += 1;
         const response = await apiClient.post<any>("/validate/all-rules", {
           xml_content: xmlText,
         });
@@ -361,6 +387,16 @@ export default function DashboardShell() {
         }
       }
       refetchStats();
+
+      if (skippedEmptyFiles > 0) {
+        setToast({
+          message:
+            validatedFiles > 0
+              ? `Validated ${validatedFiles} file${validatedFiles === 1 ? "" : "s"}; skipped ${skippedEmptyFiles} empty file${skippedEmptyFiles === 1 ? "" : "s"}`
+              : "No non-empty XML files were found to validate.",
+          type: validatedFiles > 0 ? "success" : "error",
+        });
+      }
       
       // Clean UI reset once upload + validation completes successfully
       setUploadedFiles(null);
@@ -420,7 +456,117 @@ export default function DashboardShell() {
 
             {/* Step 2 and Step 3 Cards Row */}
             <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              
+
+              {/* STEP 3: XML Upload & Validate Card */}
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm min-h-[500px]"
+              >
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold tracking-tight text-slate-900">Step 1: Upload Invoices & Validate</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Upload single or bulk XML files to run real-time schemas & templates.</p>
+                </div>
+
+                {uploadedFiles ? (
+                  // Files Selected / Uploaded state
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div className="space-y-4">
+                      {/* Selection Box Header */}
+                      <div className="flex items-center justify-between rounded-xl bg-indigo-50/50 border border-indigo-100 p-3">
+                        <div className="flex-1 min-w-0 pr-3">
+                          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-0.5">Uploaded XML files</span>
+                          <p className="text-sm font-semibold text-slate-800 truncate">
+                            {uploadedFiles.length === 1 ? uploadedFiles[0].name : `${uploadedFiles.length} XML files selected`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={handleEditFiles}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg border border-slate-100 transition shadow-sm animate-none"
+                            title="Replace File"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={handleClearFiles}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg border border-slate-100 transition shadow-sm"
+                            title="Clear Files"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Display file item list */}
+                      <div className="max-h-[220px] overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-50 bg-slate-50/50 p-2">
+                        {uploadedFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between py-2 px-3 text-xs text-slate-700">
+                            <span className="font-semibold truncate max-w-[80%]">{file.name}</span>
+                            <span className="text-slate-400">{(file.size / 1024).toFixed(1)} KB</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Progress Indicator */}
+                    <div className="mt-4 pt-3 border-t border-slate-100">
+                      {isValidating ? (
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center mb-3 animate-pulse">
+                          <span className="text-sm font-bold text-indigo-700 block">{progressText}</span>
+                          <span className="text-xs text-indigo-500">Executing sequential pipeline parser...</span>
+                        </div>
+                      ) : (
+                        validationResults.length > 0 && (
+                          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center mb-3 flex items-center justify-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            <span className="text-xs font-bold text-emerald-800">Sequential Validation Complete!</span>
+                          </div>
+                        )
+                      )}
+
+                      <button
+                        onClick={handleValidateBulk}
+                        disabled={isValidating}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#3749ff] to-[#4c2ff1] py-3 text-sm font-semibold text-white shadow-md disabled:opacity-50 transition"
+                      >
+                        <Play className="h-4 w-4" />
+                        {isValidating ? "Running validation pipeline..." : "Upload & Validate Invoices"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // Upload prompting State
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div
+                      className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="h-10 w-10 text-slate-400 mb-2" />
+                      <p className="text-sm font-semibold text-slate-700 text-center">Drag and drop XML files here, or click to choose files</p>
+                      <p className="text-xs text-slate-400 text-center mt-1">Accepts multiple files. Maximum size per file is 1MB.</p>
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".xml"
+                      multiple
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 py-3 text-sm font-semibold text-slate-700 transition"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Choose XML Invoices
+                    </button>
+                  </div>
+                )}
+              </motion.section>
+
               {/* STEP 2: Write/Parse Rule Card */}
               <motion.section
                 initial={{ opacity: 0, y: 10 }}
@@ -616,116 +762,6 @@ export default function DashboardShell() {
                     </button>
                   </div>
                 </div>
-              </motion.section>
-
-              {/* STEP 3: XML Upload & Validate Card */}
-              <motion.section
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm min-h-[500px]"
-              >
-                <div className="mb-4">
-                  <h3 className="text-lg font-bold tracking-tight text-slate-900">Step 3: Upload Invoices & Validate</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Upload single or bulk XML files to run real-time schemas & templates.</p>
-                </div>
-
-                {uploadedFiles ? (
-                  // Files Selected / Uploaded state
-                  <div className="flex-1 flex flex-col justify-between">
-                    <div className="space-y-4">
-                      {/* Selection Box Header */}
-                      <div className="flex items-center justify-between rounded-xl bg-indigo-50/50 border border-indigo-100 p-3">
-                        <div className="flex-1 min-w-0 pr-3">
-                          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-0.5">Uploaded XML files</span>
-                          <p className="text-sm font-semibold text-slate-800 truncate">
-                            {uploadedFiles.length === 1 ? uploadedFiles[0].name : `${uploadedFiles.length} XML files selected`}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button
-                            onClick={handleEditFiles}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg border border-slate-100 transition shadow-sm animate-none"
-                            title="Replace File"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={handleClearFiles}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg border border-slate-100 transition shadow-sm"
-                            title="Clear Files"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Display file item list */}
-                      <div className="max-h-[220px] overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-50 bg-slate-50/50 p-2">
-                        {uploadedFiles.map((file, idx) => (
-                          <div key={idx} className="flex items-center justify-between py-2 px-3 text-xs text-slate-700">
-                            <span className="font-semibold truncate max-w-[80%]">{file.name}</span>
-                            <span className="text-slate-400">{(file.size / 1024).toFixed(1)} KB</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Progress Indicator */}
-                    <div className="mt-4 pt-3 border-t border-slate-100">
-                      {isValidating ? (
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center mb-3 animate-pulse">
-                          <span className="text-sm font-bold text-indigo-700 block">{progressText}</span>
-                          <span className="text-xs text-indigo-500">Executing sequential pipeline parser...</span>
-                        </div>
-                      ) : (
-                        validationResults.length > 0 && (
-                          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center mb-3 flex items-center justify-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                            <span className="text-xs font-bold text-emerald-800">Sequential Validation Complete!</span>
-                          </div>
-                        )
-                      )}
-
-                      <button
-                        onClick={handleValidateBulk}
-                        disabled={isValidating}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#3749ff] to-[#4c2ff1] py-3 text-sm font-semibold text-white shadow-md disabled:opacity-50 transition"
-                      >
-                        <Play className="h-4 w-4" />
-                        {isValidating ? "Running validation pipeline..." : "Upload & Validate Invoices"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  // Upload prompting State
-                  <div className="flex-1 flex flex-col justify-between">
-                    <div
-                      className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Upload className="h-10 w-10 text-slate-400 mb-2" />
-                      <p className="text-sm font-semibold text-slate-700 text-center">Drag and drop XML files here, or click to choose files</p>
-                      <p className="text-xs text-slate-400 text-center mt-1">Accepts multiple files. Maximum size per file is 1MB.</p>
-                    </div>
-
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".xml"
-                      multiple
-                      className="hidden"
-                      onChange={handleFileSelect}
-                    />
-
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 py-3 text-sm font-semibold text-slate-700 transition"
-                    >
-                      <Upload className="h-4 w-4" />
-                      Choose XML Invoices
-                    </button>
-                  </div>
-                )}
               </motion.section>
 
             </section>

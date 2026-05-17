@@ -26,7 +26,7 @@ export default function Navbar() {
             </nav>
 
             <div className="hidden md:flex items-center gap-4">
-              <Link href="/signup" className="px-4 py-2 rounded-md bg-buttonBlue text-buttonText  transition">Get Started</Link>
+              <Link href="/dashboard" className="px-4 py-2 rounded-md bg-buttonBlue text-buttonText  transition">Get Started</Link>
             </div>
 
             <div className="md:hidden">
