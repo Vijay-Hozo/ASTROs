@@ -11,6 +11,7 @@ import EmptyState from "./empty-state";
 import { useApiData } from "@/lib/hooks";
 import { ErrorAlert } from "../ui/error-alert";
 import type { ValidationReportRow } from "@/lib/types";
+import ActiveXsltBanner from "@/components/workspace/active-xslt-banner";
 
 export default function ValidationResultsClient() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -31,6 +32,7 @@ export default function ValidationResultsClient() {
 
         <main className="p-4 md:p-6">
           <div className="mx-auto max-w-[1200px] space-y-6">
+            <ActiveXsltBanner compact />
             <SummaryCards results={resultsList} isLoading={isLoading} />
 
             {error && <ErrorAlert error={error} onRetry={refetch} />}

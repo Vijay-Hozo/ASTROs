@@ -30,7 +30,9 @@ export default function Header({
             <h1 className="text-2xl font-semibold tracking-tight text-[#07122F] md:text-[30px]">
               {title}
             </h1>
-            <p className="text-sm text-slate-500 md:text-[15px]">{subtitle}</p>
+            <p className="text-sm text-slate-500 md:text-[15px]">
+              {subtitle}
+            </p>
           </div>
         </div>
 

@@ -10,6 +10,7 @@ import RuleCard from "./rule-card";
 import { useApiData } from "../../lib/hooks";
 import { ErrorAlert } from "../ui/error-alert";
 import type { Rule } from "../../lib/types";
+import ActiveXsltBanner from "@/components/workspace/active-xslt-banner";
 
 export default function RulesLibraryClient() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -18,7 +19,7 @@ export default function RulesLibraryClient() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Fetch rules
-  const { data: rules, isLoading, error, refetch } = useApiData<Rule[]>("/rules");
+  const { data: rules, error, refetch } = useApiData<Rule[]>("/rules");
   const rulesList = rules || [];
 
   return (
@@ -35,6 +36,7 @@ export default function RulesLibraryClient() {
 
         <main className="p-4 md:p-6">
           <div className="mx-auto max-w-[1400px] space-y-6">
+            <ActiveXsltBanner compact />
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-4" />
               <div className="flex items-center gap-3">

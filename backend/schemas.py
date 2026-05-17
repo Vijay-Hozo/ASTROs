@@ -76,6 +76,20 @@ class ValidateBatchRequest(BaseModel):
     }
 
 
+class ValidateWorkspaceRequest(BaseModel):
+    """Validate one XML invoice against a selected XSLT workspace file."""
+    xml_content: str = Field(..., min_length=10, description="Raw XML invoice string")
+    xslt_content: str = Field(..., min_length=10, description="XSLT content for the selected workspace file")
+    xslt_name: Optional[str] = Field(default=None, description="Optional workspace file name for logging")
+
+    @field_validator("xml_content", "xslt_content")
+    @classmethod
+    def content_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("content cannot be blank")
+        return v.strip()
+
+
 class SaveRuleRequest(BaseModel):
     """Persist a natural-language rule to the database."""
     rule_text: str = Field(..., min_length=5, max_length=500, description="Natural language rule in plain English (max 500 chars)")
@@ -139,6 +153,11 @@ class ParsedRule(BaseModel):
     condition_field: Optional[str] = None
     condition_value: Optional[str] = None
     extra: Optional[dict] = None
+    pattern: Optional[str] = None
+    allowed_values: Optional[List[str]] = None
+    order: Optional[int] = None
+    is_direct_tag: Optional[bool] = None
+    xpath: Optional[str] = None
 
 
 class ValidationResult(BaseModel):
@@ -280,6 +299,9 @@ class ParseRuleResponse(BaseModel):
     """Response from parsing a rule."""
     rule_text: str
     parsed_rule: ParsedRule
+    parsed_rules: List[ParsedRule] = Field(default_factory=list)
+    rule_count: int = 0
+    warnings: List[str] = Field(default_factory=list)
     xslt: str = Field(..., description="Generated XSLT validation logic")
     xpath: Optional[str] = None
     python_logic: Optional[str] = None

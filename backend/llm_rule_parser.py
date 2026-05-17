@@ -10,6 +10,7 @@ import re
 import requests
 from dotenv import load_dotenv
 from xslt_templates import build_xslt
+from rule_engine import parse_and_build_xslt as _parse_and_build_xslt
 
 load_dotenv()
 
@@ -427,15 +428,12 @@ def parse_rule_with_llm(rule_text: str) -> dict:
 
 
 def parse_rule(rule_text: str) -> dict:
-    structured = parse_rule_with_llm(rule_text)
-    structured["rule_text"] = rule_text
-    return structured
+    result = _parse_and_build_xslt(rule_text)
+    return result["structured"]
 
 
 def parse_rule_and_build_xslt(rule_text: str) -> dict:
-    structured = parse_rule(rule_text)
-    xslt_str   = build_xslt(structured)
-    return {"structured": structured, "xslt": xslt_str}
+    return _parse_and_build_xslt(rule_text)
 
 
 if __name__ == "__main__":

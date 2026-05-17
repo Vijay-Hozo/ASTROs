@@ -33,6 +33,7 @@ from schemas import (
     SaveRuleRequest,
     ParseRuleRequest,
     BatchEvaluateRequest,
+    ValidateWorkspaceRequest,
     ValidationResult as ValidationResultSchema,
     BatchValidationResponse,
     BatchSummary,
@@ -46,6 +47,7 @@ from schemas import (
 )
 from evaluator import evaluate_one, evaluate_batch
 from llm_rule_parser import parse_rule_and_build_xslt
+from xslt_executor import execute_workspace_xslt
 from xml_reader import parse_invoice_xml, extract_xml_tags
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -964,6 +966,39 @@ async def validate_all_rules(body: BatchEvaluateRequest, db: AsyncSession = Depe
         await db.rollback()
         logger.error(f"Batch validation failed: {str(e)[:100]}")
         raise HTTPException(status_code=500, detail="Batch validation failed")
+
+
+@app.post("/validate/workspace")
+async def validate_workspace(body: ValidateWorkspaceRequest):
+    """Validate one XML invoice against one selected XSLT workspace file."""
+
+    if len(body.xml_content) > MAX_XML_SIZE:
+        raise HTTPException(status_code=413, detail=f"XML too large (max {MAX_XML_SIZE} bytes)")
+
+    if len(body.xslt_content) > MAX_XML_SIZE:
+        raise HTTPException(status_code=413, detail=f"XSLT too large (max {MAX_XML_SIZE} bytes)")
+
+    try:
+        from lxml import etree as _etree
+        _etree.fromstring(body.xml_content.encode())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid XML format: {str(e)[:80]}")
+
+    try:
+        result = await asyncio.wait_for(
+            run_in_threadpool(execute_workspace_xslt, body.xslt_content, body.xml_content, body.xslt_name or ""),
+            timeout=BATCH_VALIDATION_TIMEOUT,
+        )
+        if result.get("error"):
+            raise HTTPException(status_code=400, detail=result["error"])
+        return result
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail=f"Workspace validation timeout ({BATCH_VALIDATION_TIMEOUT}s limit)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Workspace validation failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Workspace validation failed")
 
 
 # ─── Upload XML file ──────────────────────────────────────────────────────────
