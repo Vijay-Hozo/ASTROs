@@ -558,6 +558,32 @@ export default function DashboardShell() {
                     </div>
                   </div>
 
+                  {/* Parser Logic (Structured JSON) Block */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-slate-600">Parser Logic (Structured JSON)</span>
+                      <button
+                        onClick={() => copyToClipboard(JSON.stringify(parsedRule?.parsed_rule || {}, null, 2))}
+                        disabled={!parsedRule}
+                        className="inline-flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed px-2 py-0.5 rounded transition"
+                      >
+                        <Copy className="h-3 w-3" />
+                        {copiedIndex ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="relative border border-slate-200 rounded-xl bg-slate-900 p-3 h-[110px] overflow-y-auto font-mono text-[11px] leading-5 text-indigo-400">
+                      <pre className="whitespace-pre-wrap">
+                        {parseLoading ? (
+                          "// Extracting structured parser logic..."
+                        ) : parsedRule ? (
+                          JSON.stringify(parsedRule.parsed_rule, null, 2) || "// No parsed rule"
+                        ) : (
+                          "// Structured parser JSON will be shown here"
+                        )}
+                      </pre>
+                    </div>
+                  </div>
+
                   {/* XSLT Monospace Scrollable Block */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
