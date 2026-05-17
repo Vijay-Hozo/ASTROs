@@ -24,6 +24,7 @@ export type RuleType =
 export type RuleSeverity = "low" | "medium" | "high";
 
 export interface ParsedRule {
+  description?: string | null;
   rule_type: RuleType;
   field?: string | null;
   operation?: string | null;
