@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice>
+  <invoice_id>INV-F003</invoice_id>
+  <issue_date>2026-02-10</issue_date>
+  <seller_name></seller_name>
+  <buyer_name>HCL Technologies</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>50000.00</taxable_amount>
+  <tax_amount>17000.00</tax_amount>
+  <payable_amount>67000.00</payable_amount>
+  <tax_category>S</tax_category>
+  <buyer_vat>29VWXYZ1234M5Z6</buyer_vat>
+  <purchase_order>PO-2026-0099</purchase_order>
+  <line_items>
+    <item><description>Consulting Services</description><quantity>1</quantity><unit_price>50000.00</unit_price><line_total>50000.00</line_total></item>
+  </line_items>
+</Invoice>
