@@ -29,11 +29,15 @@ import { useApiData } from "@/lib/hooks";
 import { apiClient } from "@/lib/api-client";
 import { ErrorAlert } from "../ui/error-alert";
 import { StatsCardLoadingSkeleton } from "../ui/loading-skeleton";
-import type { DashboardStats, ParseRuleResponse } from "@/lib/types";
+import type { DashboardStats, ParseRuleResponse, XsltSelection } from "@/lib/types";
 import { XmlTagChips } from "./xml-tag-chips";
+import SetupModal, { hasSetupCompleted } from "./setup-modal";
+import { appendRulesToXSLTFile } from "@/lib/xslt-manager";
+import { useXsltWorkspace } from "@/lib/xslt-workspace-context";
 
 export default function DashboardShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showSetupModal, setShowSetupModal] = useState(false);
 
   // --- Strict Local State as requested ---
   const [ruleText, setRuleText] = useState("");
@@ -42,6 +46,7 @@ export default function DashboardShell() {
   const [validationResults, setValidationResults] = useState<any[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [setupSampleFile, setSetupSampleFile] = useState<File | null>(null);
 
   const [parseLoading, setParseLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -57,6 +62,19 @@ export default function DashboardShell() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const ruleTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const {
+    activeXSLTFile,
+    activeXSLTFileId,
+    activeXSLTContent,
+    activeRules,
+    activeSelection,
+    setActiveXSLTSelection,
+    updateActiveXSLTWorkspace,
+  } = useXsltWorkspace();
+
+  useEffect(() => {
+    setShowSetupModal(!hasSetupCompleted());
+  }, []);
 
   // Memoize options to prevent infinite loops
   const dashboardOptions = useMemo(() => ({
@@ -87,6 +105,10 @@ export default function DashboardShell() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  const selectedSampleXmlName = setupSampleFile?.name ?? "No sample XML selected";
+  const selectedXsltName = activeXSLTFile?.name ?? activeSelection?.draft?.name ?? "No XSLT file selected";
+  const validatedAgainstName = activeXSLTFile?.name ?? activeSelection?.draft?.name ?? "No XSLT file selected";
 
   // Parse XML Helper for Preview Card
   const parsedPreviewData = useMemo(() => {
@@ -263,14 +285,25 @@ export default function DashboardShell() {
       setToast({ message: "Generated XSLT logic is missing", type: "error" });
       return;
     }
+    if (!activeXSLTFile) {
+      setToast({ message: "Select an XSLT workspace before saving the rule", type: "error" });
+      return;
+    }
     setSaveLoading(true);
     try {
+      const appendedWorkspace = await appendRulesToXSLTFile(activeXSLTFile, ruleText);
       await apiClient.post("/rules", {
         rule_text: ruleText,
         severity: severity,
       });
       setSaveSuccess(true);
       setToast({ message: "Validation rule added to library", type: "success" });
+      await updateActiveXSLTWorkspace({
+        selection: activeSelection ? { ...activeSelection, file: appendedWorkspace.file } : { mode: "existing", file: appendedWorkspace.file },
+        file: appendedWorkspace.file,
+        content: appendedWorkspace.parsed.xslt,
+        rules: appendedWorkspace.parsed.parsed_rules,
+      });
       
       // Safe reset on success
       setRuleText("");
@@ -355,6 +388,11 @@ export default function DashboardShell() {
 
   const handleValidateBulk = async () => {
     if (!uploadedFiles || uploadedFiles.length === 0) return;
+    if (!activeXSLTFile?.id || !activeXSLTContent) {
+      setToast({ message: "Choose an XSLT file before validating XML", type: "error" });
+      setShowSetupModal(true);
+      return;
+    }
     setIsValidating(true);
     setValidationResults([]);
     setExpandedFiles({});
@@ -373,12 +411,15 @@ export default function DashboardShell() {
         }
 
         validatedFiles += 1;
-        const response = await apiClient.post<any>("/validate/all-rules", {
+        const response = await apiClient.post<any>("/validate/workspace", {
           xml_content: xmlText,
+          xslt_content: activeXSLTContent,
+          xslt_name: activeXSLTFile.name,
         });
 
         const newResult = {
           filename: file.name,
+          validatedAgainst: activeXSLTFile?.name ?? null,
           results: response.results || [],
         };
 
@@ -428,8 +469,30 @@ export default function DashboardShell() {
     setTimeout(() => setCopiedIndex(false), 2000);
   };
 
+  const handleSetupComplete = async (payload: { xmlFile: File | null; xsltSelection: XsltSelection }) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        "astro-dashboard-setup-config",
+        JSON.stringify({
+          xmlFileName: payload.xmlFile?.name ?? null,
+          xsltMode: payload.xsltSelection.mode,
+          xsltFileId: payload.xsltSelection.file?.id ?? null,
+          xsltName: payload.xsltSelection.file?.name ?? payload.xsltSelection.draft?.name ?? null,
+        }),
+      );
+    }
+    setShowSetupModal(false);
+    setToast({ message: "Workspace setup completed", type: "success" });
+    // Keep the selected sample file available to other dashboard widgets
+    setSetupSampleFile(payload.xmlFile ?? null);
+    // Show the selected file in the preview area
+    if (payload.xmlFile) setPreviewFile(payload.xmlFile);
+    await setActiveXSLTSelection(payload.xsltSelection);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      <SetupModal open={showSetupModal} onComplete={handleSetupComplete} />
       <DesktopSidebar />
       <MobileSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
 
@@ -438,6 +501,29 @@ export default function DashboardShell() {
 
         <main className="p-4 md:p-6">
           <div className="mx-auto max-w-[1440px] space-y-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Selected Sample XML</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{selectedSampleXmlName}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Selected XSLT File</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{selectedXsltName}</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSetupModal(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Rechoose / Reupload
+                </button>
+              </div>
+            </div>
             
             {/* Stats Section */}
             {statsError && <ErrorAlert error={statsError} onRetry={refetchStats} />}
@@ -533,7 +619,7 @@ export default function DashboardShell() {
                         className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#3749ff] to-[#4c2ff1] py-3 text-sm font-semibold text-white shadow-md disabled:opacity-50 transition"
                       >
                         <Play className="h-4 w-4" />
-                        {isValidating ? "Running validation pipeline..." : "Upload & Validate Invoices"}
+                        {isValidating ? "Running validation pipeline..." : "Validate Selected XSLT"}
                       </button>
                     </div>
                   </div>
@@ -616,7 +702,8 @@ export default function DashboardShell() {
                   {/* Always visible input area */}
                   <div className="space-y-4">
                     <XmlTagChips
-                      onTagClick={(tag) => {
+                      sampleFile={setupSampleFile}
+                      onTagClick={(tag: string) => {
                         const textarea = ruleTextareaRef.current;
                         if (!textarea) return;
                         const start = textarea.selectionStart ?? textarea.value.length;
@@ -704,12 +791,26 @@ export default function DashboardShell() {
                     </div>
                   </div>
 
+                  {parsedRule?.parsed_rules && parsedRule.parsed_rules.length > 1 && (
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-xs text-indigo-800">
+                      Parsed {parsedRule.parsed_rules.length} intents from a single input.
+                    </div>
+                  )}
+
                   {/* Parser Logic (Structured JSON) Block */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-semibold text-slate-600">Parser Logic (Structured JSON)</span>
                       <button
-                        onClick={() => copyToClipboard(JSON.stringify(parsedRule?.parsed_rule || {}, null, 2))}
+                        onClick={() =>
+                          copyToClipboard(
+                            JSON.stringify(
+                              parsedRule?.parsed_rules?.length ? parsedRule.parsed_rules : parsedRule?.parsed_rule || {},
+                              null,
+                              2,
+                            ),
+                          )
+                        }
                         disabled={!parsedRule}
                         className="inline-flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed px-2 py-0.5 rounded transition"
                       >
@@ -722,7 +823,11 @@ export default function DashboardShell() {
                         {parseLoading ? (
                           "// Extracting structured parser logic..."
                         ) : parsedRule ? (
-                          JSON.stringify(parsedRule.parsed_rule, null, 2) || "// No parsed rule"
+                          JSON.stringify(
+                            parsedRule.parsed_rules?.length ? parsedRule.parsed_rules : parsedRule.parsed_rule,
+                            null,
+                            2,
+                          ) || "// No parsed rule"
                         ) : (
                           "// Structured parser JSON will be shown here"
                         )}
@@ -889,6 +994,7 @@ export default function DashboardShell() {
                 <div>
                   <h3 className="text-lg font-bold tracking-tight text-slate-900">Validation Results</h3>
                   <p className="text-xs text-slate-500 mt-0.5">Results of executing rules sequentially against your upload.</p>
+                  <p className="mt-1 text-xs font-semibold text-indigo-700">Validated Against: {validatedAgainstName}</p>
                 </div>
 
                 <div className="space-y-3">

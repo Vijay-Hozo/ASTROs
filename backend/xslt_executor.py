@@ -95,6 +95,135 @@ def execute_xslt(xslt_str: str, xml_str: str, rule_text: str = "") -> dict:
     }
 
 
+def execute_workspace_xslt(xslt_str: str, xml_str: str, xslt_name: str = "") -> dict:
+    """
+    Run one combined workspace XSLT against an XML invoice and return all rule results.
+    """
+    try:
+        xslt_doc = etree.fromstring(xslt_str.encode())
+        transform = etree.XSLT(xslt_doc)
+    except etree.XMLSyntaxError as e:
+        return {
+            "invoice_id": "unknown",
+            "summary": {"total": 0, "passed": 0, "failed": 0, "errors": 0},
+            "results": [],
+            "error": f"Invalid XSLT generated: {str(e)[:80]}",
+            "xslt_name": xslt_name,
+        }
+    except Exception as e:
+        return {
+            "invoice_id": "unknown",
+            "summary": {"total": 0, "passed": 0, "failed": 0, "errors": 0},
+            "results": [],
+            "error": f"XSLT compilation failed: {str(e)[:80]}",
+            "xslt_name": xslt_name,
+        }
+
+    try:
+        parser = etree.XMLParser(resolve_entities=False)
+        xml_doc = etree.fromstring(xml_str.encode(), parser=parser)
+    except etree.XMLSyntaxError as e:
+        return {
+            "invoice_id": "unknown",
+            "summary": {"total": 0, "passed": 0, "failed": 0, "errors": 0},
+            "results": [],
+            "error": f"Invalid XML invoice: {str(e)[:80]}",
+            "xslt_name": xslt_name,
+        }
+    except Exception as e:
+        return {
+            "invoice_id": "unknown",
+            "summary": {"total": 0, "passed": 0, "failed": 0, "errors": 0},
+            "results": [],
+            "error": f"XML parsing failed: {str(e)[:80]}",
+            "xslt_name": xslt_name,
+        }
+
+    today = date.today().isoformat()
+    try:
+        result_tree = transform(xml_doc, current_date=f"'{today}'")
+    except Exception as e:
+        return {
+            "invoice_id": "unknown",
+            "summary": {"total": 0, "passed": 0, "failed": 0, "errors": 0},
+            "results": [],
+            "error": f"XSLT execution failed: {str(e)[:80]}",
+            "xslt_name": xslt_name,
+        }
+
+    result_root = result_tree.getroot()
+    if result_root is None:
+        return {
+            "invoice_id": "unknown",
+            "summary": {"total": 0, "passed": 0, "failed": 0, "errors": 0},
+            "results": [],
+            "error": "XSLT produced no output",
+            "xslt_name": xslt_name,
+        }
+
+    def text_or_none(node, tag: str):
+        el = node.find(tag)
+        return el.text.strip() if el is not None and el.text else ""
+
+    rule_results = result_root.findall(".//rule_result")
+    results = []
+    for rule_node in rule_results:
+        status = text_or_none(rule_node, "status")
+        message = text_or_none(rule_node, "message")
+        field = text_or_none(rule_node, "field")
+        rule_type = rule_node.get("rule_type")
+        label = rule_type or xslt_name or "workspace rule"
+        if field and field not in label:
+            label = f"{label}:{field}"
+        results.append(
+            {
+                "status": status or "ERROR",
+                "field": field or None,
+                "message": message,
+                "rule_text": label,
+                "rule_type": rule_type,
+                "rule_id": rule_node.get("order"),
+            }
+        )
+
+    if not results:
+        status = text_or_none(result_root, "status")
+        message = text_or_none(result_root, "message")
+        field = text_or_none(result_root, "field")
+        results.append(
+            {
+                "status": status or "ERROR",
+                "field": field or None,
+                "message": message,
+                "rule_text": xslt_name or "workspace rule",
+                "rule_type": None,
+                "rule_id": None,
+            }
+        )
+
+    passed = sum(1 for r in results if r["status"] == "PASS")
+    failed = sum(1 for r in results if r["status"] == "FAIL")
+    errors = sum(1 for r in results if r["status"] == "ERROR")
+
+    try:
+        inv_id_el = xml_doc.find("invoice_id")
+        invoice_id = inv_id_el.text.strip() if inv_id_el is not None and inv_id_el.text else "unknown"
+    except Exception:
+        invoice_id = "unknown"
+
+    return {
+        "invoice_id": invoice_id,
+        "summary": {
+            "total": len(results),
+            "passed": passed,
+            "failed": failed,
+            "errors": errors,
+        },
+        "results": results,
+        "xslt_name": xslt_name,
+    }
+
+
 def execute_all_rules(rules: list, xml_str: str) -> dict:
     """
     Run all rules (each with prebuilt XSLT) against one XML invoice.

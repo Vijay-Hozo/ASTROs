@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
 import HealthCheck from "@/components/health-check";
+import { XsltWorkspaceProvider } from "@/lib/xslt-workspace-context";
 import "./globals.css";
 import { Plus_Jakarta_Sans } from 'next/font/google';
 
@@ -35,7 +36,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <XsltWorkspaceProvider>{children}</XsltWorkspaceProvider>
           <HealthCheck />
         </ThemeProvider>
       </body>

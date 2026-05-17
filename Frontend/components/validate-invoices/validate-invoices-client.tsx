@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { DesktopSidebar, MobileSidebar } from "@/components/dashboard/sidebar";
 import Header from "@/components/dashboard/header";
 import ValidateInvoicesShell from "@/components/validate-invoices/validate-invoices-shell";
+import ActiveXsltBanner from "@/components/workspace/active-xslt-banner";
 
 export default function ValidateInvoicesClient() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -18,6 +19,7 @@ export default function ValidateInvoicesClient() {
 
         <main className="p-4 md:p-6">
           <div className="mx-auto max-w-[1600px] space-y-6">
+            <ActiveXsltBanner compact />
             <ValidateInvoicesShell />
           </div>
         </main>

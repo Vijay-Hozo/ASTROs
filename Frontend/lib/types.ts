@@ -15,7 +15,11 @@ export type RuleType =
   | "amount_calculation"
   | "currency_consistency"
   | "tax_category_validation"
-  | "duplicate_field_check";
+  | "duplicate_field_check"
+  | "regex_validation"
+  | "enum_validation"
+  | "cross_field_validation"
+  | "unsupported";
 
 export type RuleSeverity = "low" | "medium" | "high";
 
@@ -24,11 +28,22 @@ export interface ParsedRule {
   field?: string | null;
   operation?: string | null;
   value?: unknown;
+  min?: number | null;
+  max?: number | null;
+  constraint?: string | null;
+  reference_field?: string | null;
+  expression?: string | null;
+  rate?: number | null;
+  tolerance?: number | null;
   condition_field?: string | null;
   condition_value?: string | null;
   base_field?: string | null;
+  pattern?: string | null;
+  allowed_values?: string[] | null;
+  order?: number | null;
+  is_direct_tag?: boolean | null;
+  xpath?: string | null;
   extra?: Record<string, unknown>;
-  xpath?: string;
   python_logic?: string;
   xslt?: string;
   _provider?: "groq" | "openrouter";
@@ -37,9 +52,39 @@ export interface ParsedRule {
 export interface ParseRuleResponse {
   rule_text: string;
   parsed_rule: ParsedRule;
+  parsed_rules: ParsedRule[];
+  rule_count: number;
+  warnings: string[];
   xslt: string;
   xpath?: string;
   python_logic?: string;
+}
+
+export interface XsltStorageFile {
+  id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+  rule_count: number;
+  documentPath: string;
+  metadataPath: string;
+}
+
+export interface XsltFileDraft {
+  name: string;
+  description?: string;
+  content?: string;
+  rule_count?: number;
+  id?: string;
+  rule_texts?: string[];
+  parsed_rules?: ParsedRule[];
+}
+
+export interface XsltSelection {
+  mode: "existing" | "create";
+  file?: XsltStorageFile | null;
+  draft?: XsltFileDraft | null;
 }
 
 export interface Rule {

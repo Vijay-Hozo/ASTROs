@@ -44,7 +44,7 @@ export default function Navbar() {
               <Link href="#use-cases" onClick={() => setOpen(false)} className="py-2">Use Cases</Link>
               <Link href="#pricing" onClick={() => setOpen(false)} className="py-2">Pricing</Link>
               <Link href="#docs" onClick={() => setOpen(false)} className="py-2">Docs</Link>
-              <Link href="/signup" onClick={() => setOpen(false)} className="mt-2 py-2 rounded-md bg-buttonBlue text-buttonText text-center">Get Started</Link>
+              <Link href="/dashboard" onClick={() => setOpen(false)} className="mt-2 py-2 rounded-md bg-buttonBlue text-buttonText text-center">Get Started</Link>
             </div>
           </div>
         )}

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { motion } from "framer-motion";
@@ -14,6 +13,7 @@ type SidebarProps = {
 const navItems = [
   { label: "Dashboard", icon: Home, href: "/dashboard" },
   { label: "Rules Library", icon: FileCode2, href: "/rules-library" },
+  { label: "View XSLT Files", icon: FileCode2, href: "/xslt-files" },
 //   { label: "Rule Engine", icon: Sparkles, href: "/rule-engine" },
 //   { label: "Validate Invoices", icon: FileCheck2, href: "/validate-invoices" },
 //   { label: "Invoices", icon: FileText },
