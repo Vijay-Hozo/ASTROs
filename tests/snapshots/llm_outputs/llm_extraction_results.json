@@ -1,0 +1,156 @@
+{
+  "1": {
+    "rule_text": "Seller name is required",
+    "structured": {
+      "rule_type": "required_field",
+      "field": "seller_name",
+      "description": "Seller name is required",
+      "confidence": 0.99,
+      "warnings": [],
+      "operation": "not_empty",
+      "operator": "not_empty",
+      "constraint": null,
+      "rate": null,
+      "reference_field": null,
+      "_provider": "openrouter",
+      "rule_text": "Seller name is required"
+    },
+    "xslt_generated": true
+  },
+  "2": {
+    "rule_text": "Buyer name is required",
+    "structured": {
+      "rule_type": "required_field",
+      "field": "buyer_name",
+      "description": "Buyer name is required",
+      "confidence": 0.99,
+      "warnings": [],
+      "operation": "not_empty",
+      "operator": "not_empty",
+      "constraint": null,
+      "rate": null,
+      "reference_field": null,
+      "_provider": "openrouter",
+      "rule_text": "Buyer name is required"
+    },
+    "xslt_generated": true
+  },
+  "3": {
+    "rule_text": "Invoice ID is required",
+    "structured": {
+      "rule_type": "required_field",
+      "field": "invoice_id",
+      "description": "Invoice ID is required",
+      "confidence": 0.99,
+      "warnings": [],
+      "operation": "not_empty",
+      "operator": "not_empty",
+      "constraint": null,
+      "rate": null,
+      "reference_field": null,
+      "_provider": "openrouter",
+      "rule_text": "Invoice ID is required"
+    },
+    "xslt_generated": true
+  },
+  "4": {
+    "rule_text": "Tax amount must be exactly 18% of taxable amount",
+    "structured": {
+      "rule_type": "amount_calculation",
+      "field": "tax_amount",
+      "reference_field": "taxable_amount",
+      "rate": 18,
+      "tolerance": 0.01,
+      "description": "Tax amount must be exactly 18% of taxable amount",
+      "confidence": 0.95,
+      "warnings": [],
+      "operation": "percentage",
+      "base_field": "taxable_amount",
+      "value": 18,
+      "operator": "percentage",
+      "constraint": null,
+      "_provider": "openrouter",
+      "rule_text": "Tax amount must be exactly 18% of taxable amount"
+    },
+    "xslt_generated": true
+  },
+  "5": {
+    "rule_text": "Currency code must be INR",
+    "structured": {
+      "rule_type": "currency_consistency",
+      "field": "currency_code",
+      "operator": "eq",
+      "value": [
+        "INR"
+      ],
+      "description": "Currency code must be INR",
+      "confidence": 0.99,
+      "warnings": [],
+      "operation": "in",
+      "constraint": null,
+      "rate": null,
+      "reference_field": null,
+      "_provider": "openrouter",
+      "rule_text": "Currency code must be INR"
+    },
+    "xslt_generated": true
+  },
+  "6": {
+    "rule_text": "Issue date cannot be in the future",
+    "structured": {
+      "rule_type": "date_validation",
+      "field": "issue_date",
+      "constraint": "not_future",
+      "description": "Issue date cannot be in the future",
+      "confidence": 0.99,
+      "warnings": [],
+      "operation": "not_future",
+      "operator": "not_future",
+      "rate": null,
+      "reference_field": null,
+      "_provider": "openrouter",
+      "rule_text": "Issue date cannot be in the future"
+    },
+    "xslt_generated": true
+  },
+  "7": {
+    "rule_text": "Payable amount must be greater than 0",
+    "structured": {
+      "rule_type": "numeric_comparison",
+      "field": "payable_amount",
+      "operator": "gt",
+      "value": 0,
+      "description": "Payable amount must be greater than 0",
+      "confidence": 0.99,
+      "warnings": [],
+      "operation": "gt",
+      "constraint": null,
+      "rate": null,
+      "reference_field": null,
+      "_provider": "openrouter",
+      "rule_text": "Payable amount must be greater than 0"
+    },
+    "xslt_generated": true
+  },
+  "9": {
+    "rule_text": "La devise de la facture doit \u00eatre USD",
+    "structured": {
+      "rule_type": "currency_consistency",
+      "field": "currency_code",
+      "value": [
+        "USD"
+      ],
+      "description": "La devise de la facture doit \u00eatre USD",
+      "confidence": 0.99,
+      "warnings": [],
+      "operation": "in",
+      "operator": "in",
+      "constraint": null,
+      "rate": null,
+      "reference_field": null,
+      "_provider": "openrouter",
+      "rule_text": "La devise de la facture doit \u00eatre USD"
+    },
+    "xslt_generated": true
+  }
+}

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+dataset/
+.env
+database.db
+venv/
+.venv/
+backend/venv/
+backend/database.db
+backend/__pycache__/
+backend/qa_full_test.py
+backend/test_endpoints.py
+backend/verify_fixes.py

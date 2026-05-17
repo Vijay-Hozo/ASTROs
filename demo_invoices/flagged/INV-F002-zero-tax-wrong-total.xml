@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice>
+  <invoice_id>INV-F002</invoice_id>
+  <issue_date>2026-04-20</issue_date>
+  <seller_name>QuickParts India</seller_name>
+  <buyer_name>Tata Motors</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>80000.00</taxable_amount>
+  <tax_amount>0.00</tax_amount>
+  <payable_amount>95000.00</payable_amount>
+  <tax_category>S</tax_category>
+  <buyer_vat>27GHIJK6789L4Z3</buyer_vat>
+  <purchase_order>PO-2026-0077</purchase_order>
+  <line_items>
+    <item><description>Engine Parts Batch</description><quantity>10</quantity><unit_price>8000.00</unit_price><line_total>80000.00</line_total></item>
+  </line_items>
+</Invoice>

@@ -1,0 +1,25 @@
+﻿app/protected/page.tsx(5,32): error TS2307: Cannot find module '@/components/tutorial/fetch-data-steps' or its corresponding type declarations.
+components/dashboard/upload-card.tsx(78,73): error TS2554: Expected 1 arguments, but got 2.
+components/rules-library/rules-library-client.tsx(128,18): error TS18047: 'rules' is possibly 'null'.
+components/rules-library/rules-library-client.tsx(129,40): error TS2740: Type 'Rule' is missing the following properties from type 'Rule': name, type, text, status, and 2 more.
+components/rules-library/rules-library-client.tsx(137,25): error TS2322: Type 'Rule | null' is not assignable to type 'Rule | null | undefined'.
+  Type 'Rule' is missing the following properties from type 'Rule': name, type, text, status, and 2 more.
+components/validation-results/summary-cards.tsx(34,17): error TS18047: 'results' is possibly 'null'.
+components/validation-results/summary-cards.tsx(35,18): error TS18047: 'results' is possibly 'null'.
+components/validation-results/summary-cards.tsx(36,18): error TS18047: 'results' is possibly 'null'.
+components/validation-results/summary-cards.tsx(37,18): error TS18047: 'results' is possibly 'null'.
+components/validation-results/validation-results-client.tsx(21,22): error TS18047: 'results' is possibly 'null'.
+components/validation-results/validation-results-client.tsx(57,27): error TS2322: Type 'ValidationResult | null' is not assignable to type 'ValidationResult | null | undefined'.
+  Type 'ValidationResult' is missing the following properties from type 'ValidationResult': invoiceId, date, rulesChecked, passed, failed
+components/validation-results/validation-table.tsx(21,19): error TS18047: 'results' is possibly 'null'.
+components/validation-results/validation-table.tsx(23,12): error TS18047: 'results' is possibly 'null'.
+components/validation-results/validation-table.tsx(41,7): error TS18047: 'results' is possibly 'null'.
+components/validation-results/validation-table.tsx(65,69): error TS18047: 'results' is possibly 'null'.
+components/validation-results/validation-table.tsx(90,14): error TS18047: 'filtered' is possibly 'null'.
+lib/hooks.ts(30,30): error TS2554: Expected 1 arguments, but got 0.
+lib/hooks.ts(164,12): error TS2322: Type '(endpoint: string) => Promise<T>' is not assignable to type '(body: unknown) => Promise<T>'.
+  Types of parameters 'endpoint' and 'body' are incompatible.
+    Type 'unknown' is not assignable to type 'string'.
+lib/hooks.ts(206,12): error TS2322: Type '(file: File) => Promise<T>' is not assignable to type '(body: unknown) => Promise<T>'.
+  Types of parameters 'file' and 'body' are incompatible.
+    Type 'unknown' is not assignable to type 'File'.

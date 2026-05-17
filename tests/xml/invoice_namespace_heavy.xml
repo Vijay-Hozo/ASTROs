@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ubl:Invoice xmlns:ubl="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+             xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+             xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:invoice_id>INV-NS-001</cbc:invoice_id>
+  <cbc:issue_date>2026-05-15</cbc:issue_date>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:seller_name>Namespaced Seller</cbc:seller_name>
+      </cac:PartyName>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cbc:taxable_amount>1000.00</cbc:taxable_amount>
+</ubl:Invoice>

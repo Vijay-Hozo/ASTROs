@@ -1,0 +1,37 @@
+<Invoice>
+  <invoice_id>INV-0023</invoice_id>
+  <issue_date>2027-02-15</issue_date>
+  <seller_name>Seller_5</seller_name>
+  <buyer_name>Buyer_26</buyer_name>
+  <currency_code>AED</currency_code>
+  <taxable_amount>40303.44</taxable_amount>
+  <tax_amount>11284.96</tax_amount>
+  <payable_amount>51588.4</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>9</quantity>
+      <unit_price>4940.07</unit_price>
+      <line_total>44460.63</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>10</quantity>
+      <unit_price>1620.62</unit_price>
+      <line_total>16206.2</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>8</quantity>
+      <unit_price>3082.63</unit_price>
+      <line_total>24661.04</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>9</quantity>
+      <unit_price>2162.37</unit_price>
+      <line_total>19461.33</line_total>
+    </item>
+  </line_items>
+</Invoice>

@@ -1,0 +1,26 @@
+<Invoice>
+  <invoice_id>INV-0287</invoice_id>
+  <issue_date>2026-04-13</issue_date>
+  <seller_name>Seller_19</seller_name>
+  <buyer_name>Buyer_16</buyer_name>
+  <currency_code>AED</currency_code>
+  <taxable_amount>40245.64</taxable_amount>
+  <tax_amount>4829.48</tax_amount>
+  <payable_amount>45075.12</payable_amount>
+  <tax_category>E</tax_category>
+  <tax_exemption_reason>VATEX-EU-AE</tax_exemption_reason>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>6</quantity>
+      <unit_price>4808.13</unit_price>
+      <line_total>28848.78</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>8</quantity>
+      <unit_price>3423.89</unit_price>
+      <line_total>27391.12</line_total>
+    </item>
+  </line_items>
+</Invoice>

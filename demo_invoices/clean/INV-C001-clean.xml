@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice>
+  <invoice_id>INV-C001</invoice_id>
+  <issue_date>2026-04-10</issue_date>
+  <seller_name>TechSupplies Pvt Ltd</seller_name>
+  <buyer_name>Infosys Limited</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>50000.00</taxable_amount>
+  <tax_amount>9000.00</tax_amount>
+  <payable_amount>59000.00</payable_amount>
+  <tax_category>S</tax_category>
+  <buyer_vat>29ABCDE1234F1Z5</buyer_vat>
+  <purchase_order>PO-2026-0041</purchase_order>
+  <line_items>
+    <item><description>Laptop Dell XPS 15</description><quantity>2</quantity><unit_price>20000.00</unit_price><line_total>40000.00</line_total></item>
+    <item><description>Wireless Mouse</description><quantity>10</quantity><unit_price>1000.00</unit_price><line_total>10000.00</line_total></item>
+  </line_items>
+</Invoice>

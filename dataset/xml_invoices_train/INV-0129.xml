@@ -1,0 +1,19 @@
+<Invoice>
+  <invoice_id>INV-0129</invoice_id>
+  <issue_date>2026-03-23</issue_date>
+  <seller_name>Seller_2</seller_name>
+  <buyer_name>Buyer_30</buyer_name>
+  <currency_code>USD</currency_code>
+  <taxable_amount>11286.11</taxable_amount>
+  <tax_amount>564.31</tax_amount>
+  <payable_amount>12166.89</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>8</quantity>
+      <unit_price>207.09</unit_price>
+      <line_total>1656.72</line_total>
+    </item>
+  </line_items>
+</Invoice>

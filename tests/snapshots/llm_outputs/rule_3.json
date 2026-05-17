@@ -1,0 +1,8 @@
+{
+  "rule_type": "required_field",
+  "field": "invoice_id",
+  "operation": "not_empty",
+  "message": "Invoice ID is missing",
+  "_provider": "groq",
+  "rule_text": "Invoice ID is required"
+}
