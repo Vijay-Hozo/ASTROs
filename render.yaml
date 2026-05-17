@@ -14,6 +14,8 @@ services:
         sync: false
       - key: OPEN_ROUTER_MODEL
         value: anthropic/claude-3.5-sonnet
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: FRONTEND_URL
         value: https://ps3-rule-engine.vercel.app
       - key: PORT
