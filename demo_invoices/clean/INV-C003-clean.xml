@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice>
+  <invoice_id>INV-C003</invoice_id>
+  <issue_date>2026-03-15</issue_date>
+  <seller_name>CloudSoft Technologies</seller_name>
+  <buyer_name>Reliance Industries</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>75000.00</taxable_amount>
+  <tax_amount>13500.00</tax_amount>
+  <payable_amount>88500.00</payable_amount>
+  <tax_category>S</tax_category>
+  <buyer_vat>27PQRST9012H3Z8</buyer_vat>
+  <purchase_order>PO-2026-0123</purchase_order>
+  <line_items>
+    <item><description>Annual SaaS Licence</description><quantity>5</quantity><unit_price>10000.00</unit_price><line_total>50000.00</line_total></item>
+    <item><description>Implementation Support</description><quantity>1</quantity><unit_price>25000.00</unit_price><line_total>25000.00</line_total></item>
+  </line_items>
+</Invoice>

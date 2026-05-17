@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice>
+  <invoice_id>INV-F001</invoice_id>
+  <issue_date>2027-01-15</issue_date>
+  <seller_name>FutureTech Pvt Ltd</seller_name>
+  <buyer_name>Wipro Limited</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>30000.00</taxable_amount>
+  <tax_amount>5400.00</tax_amount>
+  <payable_amount>35400.00</payable_amount>
+  <tax_category>S</tax_category>
+  <buyer_vat>29LMNOP3456K1Z2</buyer_vat>
+  <purchase_order>PO-2026-0055</purchase_order>
+  <line_items>
+    <item><description>Network Switch</description><quantity>3</quantity><unit_price>10000.00</unit_price><line_total>30000.00</line_total></item>
+  </line_items>
+</Invoice>
