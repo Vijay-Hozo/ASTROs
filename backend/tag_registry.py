@@ -5,9 +5,8 @@ CANONICAL_FIELDS = {
     "buyer_vat", "purchase_order",
 }
 
-# Deterministic lookup — grows over time as new tags are resolved
 TAG_REGISTRY: dict[str, str | None] = {
-    # exact
+    # exact canonical matches
     "tax_amount": "tax_amount",
     "taxable_amount": "taxable_amount",
     "payable_amount": "payable_amount",
@@ -21,101 +20,101 @@ TAG_REGISTRY: dict[str, str | None] = {
     "buyer_vat": "buyer_vat",
     "purchase_order": "purchase_order",
 
-    # vendor synonyms — high confidence
+    # numeric synonyms
     "TaxAmount": "tax_amount",
     "GSTAmount": "tax_amount",
+    "gst_amount": "tax_amount",
     "TaxableValue": "taxable_amount",
     "BaseAmount": "taxable_amount",
     "GrossTotal": "payable_amount",
     "AmountDue": "payable_amount",
     "NetPayable": "payable_amount",
     "TotalDue": "payable_amount",
+    "total_amount": "payable_amount",
+    "invoice_total": "payable_amount",
+
+    # id synonyms
     "InvoiceNo": "invoice_id",
     "InvoiceNumber": "invoice_id",
+    "invoice_no": "invoice_id",
+    "invoice_number": "invoice_id",
+
+    # date synonyms
     "InvoiceDate": "issue_date",
     "IssueDate": "issue_date",
+    "invoice_date": "issue_date",
+
+    # name synonyms
     "VendorName": "seller_name",
     "SupplierName": "seller_name",
+    "vendor_name": "seller_name",
+    "supplier_name": "seller_name",
     "CustomerName": "buyer_name",
+    "customer_name": "buyer_name",
+
+    # vat synonyms
     "BuyerGSTIN": "buyer_vat",
     "GSTIN": "buyer_vat",
+    "gstin": "buyer_vat",
+    "buyer_gstin": "buyer_vat",
+    "gst_number": "buyer_vat",
+
+    # currency synonyms
     "CurrencyCode": "currency_code",
+    "Currency": "currency_code",
+
+    # po synonyms
     "PONumber": "purchase_order",
     "PurchaseOrderNo": "purchase_order",
-    "ExemptionReason": "tax_exemption_reason",
+    "po_number": "purchase_order",
 
-    # common short synonyms / abbreviations
-    "tax_amt": "tax_amount",
-    "taxable_amt": "taxable_amount",
-    "payable_amt": "payable_amount",
-    "inv_id": "invoice_id",
-    "seller_nm": "seller_name",
-    "buyer_nm": "buyer_name",
-    "issue_dt": "issue_date",
-    "currency": "currency_code",
-    "tax_cat": "tax_category",
-    "exemption_reason": "tax_exemption_reason",
-    "vat": "buyer_vat",
-    "po": "purchase_order",
-
-    # known unmappable — send to LLM for judgment
+    # known unmappable — will be shown as amber chips
+    # user must write rule using exact tag, XSLT queries directly
     "FreightCharges": None,
+    "freight_charges": None,
     "RetentionAmount": None,
     "StampDuty": None,
     "Discount": None,
+    "discount_amount": None,
     "LineItemTotal": None,
+    "line_total": None,
+    "seller_ph": None,
+    "seller_phone": None,
+    "phn_num": None,
+    "phone": None,
+    "seller_address": None,
+    "buyer_address": None,
 }
 
 def resolve_tag(tag: str) -> tuple[str | None, float, list[str]]:
     """
     Returns (canonical_field, confidence, warnings).
-    canonical_field is None if unmappable.
+    Resolution order: exact → case-insensitive → unknown.
     """
-    # Normalize input
-    tag_clean = tag.strip()
-
-    # 1. Direct hit
-    if tag_clean in TAG_REGISTRY:
-        mapped = TAG_REGISTRY[tag_clean]
+    # 1. exact match
+    if tag in TAG_REGISTRY:
+        mapped = TAG_REGISTRY[tag]
         if mapped is None:
             return None, 0.0, [
-                f"XML tag '{tag_clean}' is known but has no supported field mapping.",
-                f"This tag will be sent to LLM for best-effort resolution.",
+                f"'{tag}' has no standard field mapping.",
+                "It will be queried directly from your XML using its exact tag name.",
             ]
         return mapped, 1.0, []
 
-    # 2. Case-insensitive hit
-    lower = tag_clean.lower()
+    # 2. case-insensitive match
+    lower = tag.lower()
     for k, v in TAG_REGISTRY.items():
-        if k.lower() == lower:
-            if v is None:
-                return None, 0.0, [
-                    f"XML tag '{tag_clean}' matched '{k}' case-insensitively, which has no supported mapping.",
-                ]
-            confidence = 0.9
-            return v, confidence, [f"'{tag_clean}' matched '{k}' case-insensitively → {v}"]
+        if k.lower() == lower and v is not None:
+            return v, 0.9, [f"'{tag}' matched '{k}' → mapped to '{v}'"]
 
-    # 3. Fuzzy matching fallback using standard difflib (Levenshtein-like)
-    import difflib
-    candidates = list(CANONICAL_FIELDS) + [k for k, v in TAG_REGISTRY.items() if v is not None]
-    best_matches = difflib.get_close_matches(tag_clean, candidates, n=1, cutoff=0.7)
-    
-    if best_matches:
-        match = best_matches[0]
-        mapped = match if match in CANONICAL_FIELDS else TAG_REGISTRY[match]
-        if mapped:
-            return mapped, 0.8, [
-                f"'{tag_clean}' did not match directly. Fuzzy matched to '{match}' (confidence 0.8) → {mapped}."
-            ]
-
-    # 4. Unknown — fall through to LLM
+    # 3. completely unknown
     return None, 0.0, [
-        f"XML tag '{tag_clean}' is not in the tag registry.",
-        f"Sending to LLM for semantic resolution.",
-        f"If resolved correctly, add it to TAG_REGISTRY in tag_registry.py.",
+        f"'{tag}' is not in the tag registry.",
+        "It will be treated as a direct XML tag.",
+        "If this resolves correctly, it will be added to the registry.",
     ]
 
 def register_resolved_tag(raw_tag: str, canonical: str) -> None:
-    """Call this after LLM successfully resolves an unknown tag."""
+    """Call after LLM or user confirms a tag mapping."""
     if canonical in CANONICAL_FIELDS:
         TAG_REGISTRY[raw_tag] = canonical

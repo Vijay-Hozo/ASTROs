@@ -235,3 +235,56 @@ class XMLReader:
     def parse(self, xml_content: str) -> dict:
         """Alias for extract() for compatibility."""
         return self.extract(xml_content)
+
+
+import xml.etree.ElementTree as ET
+import re
+
+def extract_xml_tags(xml_content: str) -> dict:
+    """
+    Parse an XML string and extract all leaf node tags
+    with sample values, inferred types, and xpath.
+    No LLM involved. Pure deterministic extraction.
+    """
+    try:
+        root = ET.fromstring(xml_content)
+    except ET.ParseError as e:
+        return {"error": f"Invalid XML: {str(e)}", "tags": [], "unknown_tags": [], "known_tags": []}
+
+    from tag_registry import TAG_REGISTRY
+
+    seen = {}  # tag → entry, deduplicated
+
+    def infer_type(value: str) -> str:
+        try:
+            float(value)
+            return "numeric"
+        except ValueError:
+            pass
+        if re.match(r"\d{4}-\d{2}-\d{2}", value):
+            return "date"
+        return "string"
+
+    def walk(element, path=""):
+        current_path = f"{path}/{element.tag}"
+        text = (element.text or "").strip()
+        if text and element.tag not in seen:
+            seen[element.tag] = {
+                "tag": element.tag,
+                "xpath": f"/Invoice/{element.tag}",
+                "sample_value": text[:60],
+                "inferred_type": infer_type(text),
+                "canonical_field": TAG_REGISTRY.get(element.tag),
+            }
+        for child in element:
+            walk(child, current_path)
+
+    walk(root)
+
+    all_tags = list(seen.values())
+    return {
+        "tags": all_tags,
+        "known_tags": [t for t in all_tags if t["canonical_field"] is not None],
+        "unknown_tags": [t for t in all_tags if t["canonical_field"] is None],
+        "total": len(all_tags),
+    }

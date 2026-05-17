@@ -46,7 +46,7 @@ from schemas import (
 )
 from evaluator import evaluate_one, evaluate_batch
 from llm_rule_parser import parse_rule_and_build_xslt
-from xml_reader import parse_invoice_xml
+from xml_reader import parse_invoice_xml, extract_xml_tags
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -1449,3 +1449,46 @@ async def dashboard_stats(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Failed to get stats: {str(e)[:100]}")
         raise HTTPException(status_code=500, detail="Failed to get stats")
+
+
+@app.post("/upload-sample-xml")
+async def upload_sample_xml(file: UploadFile = File(...)):
+    """
+    Accept an XML file upload, extract all tags deterministically.
+    Returns known tags (in registry) and unknown tags separately.
+    No LLM used. Pure XML parsing.
+    """
+    if not file.filename.endswith(".xml"):
+        raise HTTPException(status_code=422, detail="Only .xml files are accepted.")
+
+    try:
+        content = await file.read()
+        xml_string = content.decode("utf-8")
+    except Exception:
+        raise HTTPException(status_code=422, detail="Could not read file. Ensure it is UTF-8 encoded XML.")
+
+    result = extract_xml_tags(xml_string)
+
+    if "error" in result:
+        raise HTTPException(status_code=422, detail=result["error"])
+
+    return result
+
+
+@app.post("/resolve-tag")
+async def resolve_tag_endpoint(body: dict):
+    """
+    When user confirms what an unknown tag means,
+    register it in the session. Body: { raw_tag, canonical_field }
+    """
+    from tag_registry import TAG_REGISTRY, CANONICAL_FIELDS
+    raw_tag = body.get("raw_tag", "").strip()
+    canonical = body.get("canonical_field", "").strip()
+
+    if not raw_tag:
+        raise HTTPException(status_code=422, detail="raw_tag is required.")
+    if canonical and canonical not in CANONICAL_FIELDS:
+        raise HTTPException(status_code=422, detail=f"'{canonical}' is not a valid canonical field.")
+
+    TAG_REGISTRY[raw_tag] = canonical if canonical else None
+    return {"registered": True, "raw_tag": raw_tag, "canonical_field": canonical}

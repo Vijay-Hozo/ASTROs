@@ -178,6 +178,46 @@ For 'name' style words → suggest seller_name or buyer_name.
 For 'id', 'number', 'no' style words → suggest invoice_id.
 Always include a suggested rewrite. Never leave warnings empty on
 an unsupported result.
+
+DIRECT TAG MODE
+If the rule contains a tag that ends with _direct_tag=true in the
+metadata, or if the field name does not match any canonical field
+but was explicitly provided by the user from their XML schema,
+treat it as a DIRECT XML PATH. Do not remap it to a canonical field.
+
+Generate XSLT that queries it literally using its exact tag name.
+
+Example:
+Rule: "seller_ph must be present"
+Tag source: user XML (not canonical field)
+→
+{
+"rule_type": "presence",
+"field": "seller_ph",
+"is_direct_tag": true,
+"xpath": "/Invoice/seller_ph",
+"description": "seller_ph must be present",
+"confidence": 0.95,
+"warnings": ["'seller_ph' is a non-standard tag queried directly from user XML"]
+}
+
+For direct tags:
+
+rule_type follows normal logic (presence, compare, range etc.)
+field = exact tag name as written
+is_direct_tag = true
+xpath = "/Invoice/<tag_name>"
+Never remap or substitute the tag name
+Generate XSLT using the exact xpath provided
+UNSUPPORTED RULE — REQUIRED WARNING FORMAT
+When rule_type is unsupported, warnings must always contain:
+
+The exact unrecognized term
+Closest canonical field match
+A suggested rewrite
+Never return empty warnings on an unsupported result.
+Never return HTTP 500 for a rule parsing failure.
+Always return valid JSON only — no markdown, no explanation text.
 """
 
 
@@ -208,10 +248,11 @@ def _clean_json(raw: str, original_rule_text: str = "") -> dict:
 
     # Check for unsupported fields
     field = parsed.get("field")
-    if field and field not in allowed_fields:
-        parsed["warnings"].append(f"Field '{field}' is not in the allowed list and is unsupported")
-        parsed["rule_type"] = "unsupported"
-        parsed["field"] = None
+    if parsed.get("is_direct_tag") is not True:
+        if field and field not in allowed_fields:
+            parsed["warnings"].append(f"Field '{field}' is not in the allowed list and is unsupported")
+            parsed["rule_type"] = "unsupported"
+            parsed["field"] = None
 
     orig_type = parsed.get("rule_type", "unsupported")
 
