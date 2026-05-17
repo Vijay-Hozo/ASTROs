@@ -1,0 +1,43 @@
+<Invoice>
+  <invoice_id>INV-0253</invoice_id>
+  <issue_date>2026-02-21</issue_date>
+  <seller_name>Seller_19</seller_name>
+  <buyer_name>Buyer_18</buyer_name>
+  <currency_code>XYZ</currency_code>
+  <taxable_amount>37311.66</taxable_amount>
+  <tax_amount>3358.05</tax_amount>
+  <payable_amount>40669.71</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>4</quantity>
+      <unit_price>3891.93</unit_price>
+      <line_total>15567.72</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>4</quantity>
+      <unit_price>1506.18</unit_price>
+      <line_total>6024.72</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>3</quantity>
+      <unit_price>4918.09</unit_price>
+      <line_total>14754.27</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>2</quantity>
+      <unit_price>975.53</unit_price>
+      <line_total>1951.06</line_total>
+    </item>
+    <item>
+      <description>Item 5</description>
+      <quantity>3</quantity>
+      <unit_price>3688.64</unit_price>
+      <line_total>11065.92</line_total>
+    </item>
+  </line_items>
+</Invoice>

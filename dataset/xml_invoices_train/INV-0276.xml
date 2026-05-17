@@ -1,0 +1,19 @@
+<Invoice>
+  <invoice_id>INV-0276</invoice_id>
+  <issue_date>2026-02-16</issue_date>
+  <seller_name>Seller_20</seller_name>
+  <buyer_name>Buyer_20</buyer_name>
+  <currency_code>EUR</currency_code>
+  <taxable_amount>25465.8</taxable_amount>
+  <tax_amount>4583.84</tax_amount>
+  <payable_amount>30049.64</payable_amount>
+  <tax_category>S</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>9</quantity>
+      <unit_price>2541.48</unit_price>
+      <line_total>22873.32</line_total>
+    </item>
+  </line_items>
+</Invoice>

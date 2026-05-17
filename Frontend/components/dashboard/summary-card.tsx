@@ -12,9 +12,9 @@ export default function SummaryCard() {
 
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <h3 className="font-semibold text-[#07122F]">Validation Summary</h3>
-        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 px-2 py-0.5 text-xs font-medium">
+        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
           <AlertCircle className="h-3 w-3" />
           FAILED
         </span>

@@ -1,0 +1,43 @@
+<Invoice>
+  <invoice_id>INV-0176</invoice_id>
+  <issue_date>2026-02-16</issue_date>
+  <seller_name>Seller_3</seller_name>
+  <buyer_name>Buyer_5</buyer_name>
+  <currency_code>USD</currency_code>
+  <taxable_amount>21746.93</taxable_amount>
+  <tax_amount>1087.35</tax_amount>
+  <payable_amount>22834.28</payable_amount>
+  <tax_category>S</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>4</quantity>
+      <unit_price>2621.25</unit_price>
+      <line_total>10485.0</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>8</quantity>
+      <unit_price>95.97</unit_price>
+      <line_total>767.76</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>6</quantity>
+      <unit_price>4094.69</unit_price>
+      <line_total>24568.14</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>7</quantity>
+      <unit_price>3485.45</unit_price>
+      <line_total>24398.15</line_total>
+    </item>
+    <item>
+      <description>Item 5</description>
+      <quantity>8</quantity>
+      <unit_price>400.6</unit_price>
+      <line_total>3204.8</line_total>
+    </item>
+  </line_items>
+</Invoice>

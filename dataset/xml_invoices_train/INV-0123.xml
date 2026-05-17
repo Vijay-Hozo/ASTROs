@@ -1,0 +1,25 @@
+<Invoice>
+  <invoice_id>INV-0123</invoice_id>
+  <issue_date>2026-03-07</issue_date>
+  <seller_name>Seller_4</seller_name>
+  <buyer_name>Buyer_11</buyer_name>
+  <currency_code>EUR</currency_code>
+  <taxable_amount>27393.37</taxable_amount>
+  <tax_amount>4930.81</tax_amount>
+  <payable_amount>32324.18</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>8</quantity>
+      <unit_price>3259.01</unit_price>
+      <line_total>26072.08</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>3</quantity>
+      <unit_price>119.72</unit_price>
+      <line_total>359.16</line_total>
+    </item>
+  </line_items>
+</Invoice>

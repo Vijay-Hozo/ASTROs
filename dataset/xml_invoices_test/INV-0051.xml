@@ -1,0 +1,31 @@
+<Invoice>
+  <invoice_id/>
+  <issue_date>2026-04-26</issue_date>
+  <seller_name>Seller_20</seller_name>
+  <buyer_name>Buyer_8</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>6920.8</taxable_amount>
+  <tax_amount>1384.16</tax_amount>
+  <payable_amount>8304.96</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>4</quantity>
+      <unit_price>57.83</unit_price>
+      <line_total>231.32</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>1</quantity>
+      <unit_price>2351.18</unit_price>
+      <line_total>2351.18</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>2</quantity>
+      <unit_price>3700.47</unit_price>
+      <line_total>7400.94</line_total>
+    </item>
+  </line_items>
+</Invoice>

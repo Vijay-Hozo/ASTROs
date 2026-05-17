@@ -1,0 +1,43 @@
+<Invoice>
+  <invoice_id>INV-0064</invoice_id>
+  <issue_date>2027-03-22</issue_date>
+  <seller_name>Seller_3</seller_name>
+  <buyer_name>Buyer_24</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>40788.83</taxable_amount>
+  <tax_amount>8157.77</tax_amount>
+  <payable_amount>48946.6</payable_amount>
+  <tax_category>AE</tax_category>
+  <line_items>
+    <item>
+      <description>Item 1</description>
+      <quantity>8</quantity>
+      <unit_price>615.9</unit_price>
+      <line_total>4927.2</line_total>
+    </item>
+    <item>
+      <description>Item 2</description>
+      <quantity>10</quantity>
+      <unit_price>2341.4</unit_price>
+      <line_total>23414.0</line_total>
+    </item>
+    <item>
+      <description>Item 3</description>
+      <quantity>9</quantity>
+      <unit_price>533.39</unit_price>
+      <line_total>4800.51</line_total>
+    </item>
+    <item>
+      <description>Item 4</description>
+      <quantity>8</quantity>
+      <unit_price>922.06</unit_price>
+      <line_total>7376.48</line_total>
+    </item>
+    <item>
+      <description>Item 5</description>
+      <quantity>7</quantity>
+      <unit_price>394.56</unit_price>
+      <line_total>2761.92</line_total>
+    </item>
+  </line_items>
+</Invoice>
