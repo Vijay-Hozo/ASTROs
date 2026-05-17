@@ -6,39 +6,39 @@ Supabase (PostgreSQL) primary -> SQLite fallback.
 import os
 from datetime import datetime
 from typing import Optional, List
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 
 # Database URL
-# Priority: Supabase -> SQLite fallback
-SUPABASE_URL = os.getenv("SUPABASE_DB_URL", "")
-SQLITE_URL = f"sqlite+aiosqlite:///{os.getenv('DB_PATH', 'database.db')}"
+# Enforce Supabase PostgreSQL as primary database (no SQLite fallback)
+SUPABASE_URL = os.getenv("SUPABASE_DB_URL", "").strip()
+if not SUPABASE_URL:
+    raise RuntimeError("SUPABASE_DB_URL is not set in the environment. SQLite is disabled.")
+
+DATABASE_URL = SUPABASE_URL
+DIRECT_DATABASE_URL = SUPABASE_URL.replace(":6543", ":5432")
+print("[db] Using Supabase PostgreSQL (Production)")
 
 from sqlalchemy.pool import NullPool
 
-if SUPABASE_URL:
-    DATABASE_URL = SUPABASE_URL
-    DIRECT_DATABASE_URL = SUPABASE_URL.replace(":6543", ":5432")
-    print("[db] Using Supabase PostgreSQL")
-else:
-    DATABASE_URL = SQLITE_URL
-    DIRECT_DATABASE_URL = SQLITE_URL
-    print("[db] Supabase not configured - using SQLite fallback")
+from uuid import uuid4
 
-# Setup connect_args based on DB type to avoid SQLite TypeError
-if "sqlite" in DATABASE_URL:
-    connect_args = {"check_same_thread": False}
-else:
-    connect_args = {
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
-    }
+# Setup connect_args for PostgreSQL
+connect_args = {
+    "statement_cache_size": 0,
+    "prepared_statement_cache_size": 0,
+    "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+}
 
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
+    poolclass=NullPool,
     connect_args=connect_args,
 )
 
@@ -57,6 +57,7 @@ class Rule(Base):
     __allow_unmapped__ = True
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    xslt_id: Mapped[Optional[str]] = mapped_column(ForeignKey("xslt_files.id"), default=None)
     rule_text: Mapped[str]
     parsed_json: Mapped[str]
     rule_type: Mapped[Optional[str]] = mapped_column(default=None)
@@ -84,6 +85,7 @@ class Invoice(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     filename: Mapped[Optional[str]] = mapped_column(default=None)
+    xslt_filename: Mapped[Optional[str]] = mapped_column(default=None)
     xml_content: Mapped[str]
     file_size: Mapped[Optional[int]] = mapped_column(default=None)
     upload_status: Mapped[str] = mapped_column(default="uploaded")
@@ -123,6 +125,48 @@ class ValidationResult(Base):
     rule: Mapped[Optional["Rule"]] = relationship(back_populates="validation_results")
 
 
+class Sample(Base):
+    __tablename__ = "samples"
+    __allow_unmapped__ = True
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filename: Mapped[str]
+    xml_content: Mapped[str]
+    tags_json: Mapped[str] = mapped_column(default="{}")
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class XsltSampleLink(Base):
+    __tablename__ = "xslt_sample_links"
+    __allow_unmapped__ = True
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sample_id: Mapped[int] = mapped_column(ForeignKey("samples.id"))
+    xslt_file_id: Mapped[str]  # UUID reference to Supabase Storage XSLT file
+    linked_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class ActiveWorkspace(Base):
+    __tablename__ = "active_workspace"
+    __allow_unmapped__ = True
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(default="default", unique=True)
+    sample_id: Mapped[Optional[int]] = mapped_column(ForeignKey("samples.id"), default=None)
+    xslt_id: Mapped[Optional[str]] = mapped_column(default=None)
+    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class XsltFile(Base):
+    __tablename__ = "xslt_files"
+    __allow_unmapped__ = True
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    filename: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+
 class ValidationLogic(Base):
     __tablename__ = "validation_logic"
     __allow_unmapped__ = True
@@ -155,42 +199,23 @@ class FileValidationReport(Base):
 async def init_db():
     global engine, AsyncSessionLocal
     try:
-        if SUPABASE_URL:
-            # use a NullPool direct engine on port 5432
-            direct_engine = create_async_engine(
-                DIRECT_DATABASE_URL,  # port 5432, not 6543
-                poolclass=NullPool,
-                connect_args={"statement_cache_size": 0},
-            )
-            async with direct_engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            await direct_engine.dispose()
-            print("Database initialised (Supabase via Direct Connection)")
-        else:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            print("Database initialised (SQLite)")
+        # use a NullPool direct engine on port 5432
+        direct_engine = create_async_engine(
+            DIRECT_DATABASE_URL,  # port 5432, not 6543
+            poolclass=NullPool,
+            connect_args={
+                "statement_cache_size": 0,
+                "prepared_statement_cache_size": 0,
+                "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+            },
+        )
+        async with direct_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await direct_engine.dispose()
+        print("Database initialised (Supabase via Direct Connection)")
     except Exception as e:
-        print(f"[db] Database initialization failed with primary URL: {e}")
-        if SUPABASE_URL:
-            print("[db] Falling back to SQLite...")
-            DATABASE_URL = f"sqlite+aiosqlite:///database.db"
-            engine = create_async_engine(
-                DATABASE_URL,
-                echo=False,
-                connect_args={"check_same_thread": False},
-            )
-            AsyncSessionLocal = async_sessionmaker(
-                engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
-                autoflush=False,
-            )
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            print("Database initialised (SQLite Fallback)")
-        else:
-            raise e
+        print(f"[db] Database initialization failed: {e}")
+        raise e
 
 
 async def get_db():

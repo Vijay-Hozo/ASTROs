@@ -76,13 +76,19 @@ export function XsltWorkspaceProvider({ children }: { children: React.ReactNode 
       return;
     }
 
-    const loaded = await loadXsltFile(selection.file.id);
-    syncState({
-      selection: { ...selection, file: loaded.file },
-      file: loaded.file,
-      content: loaded.content,
-      rules: loaded.metadata?.parsed_rules ?? [],
-    });
+    try {
+      const loaded = await loadXsltFile(selection.file.id);
+      syncState({
+        selection: { ...selection, file: loaded.file },
+        file: loaded.file,
+        content: loaded.content,
+        rules: loaded.metadata?.parsed_rules ?? [],
+      });
+    } catch (err) {
+      console.warn("Failed to hydrate XSLT selection:", err instanceof Error ? err.message : err);
+      // Clear selection if file can't be loaded
+      syncState({ selection: null, file: null, content: "", rules: [] });
+    }
   }, [syncState]);
 
   useEffect(() => {

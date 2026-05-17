@@ -11,6 +11,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 import asyncio
 import logging
+import zipfile
 from io import BytesIO
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
@@ -26,14 +27,18 @@ from orm_models import (
     ValidationResult as ValidationResultORM,
     ValidationLogic,
     FileValidationReport,
+    Sample,
+    XsltSampleLink,
+    ActiveWorkspace,
+    XsltFile,
 )
 from schemas import (
     ValidateRequest,
-    ValidateBatchRequest,
+    ValidateWorkspaceRequest,
+    UpdateWorkspaceRequest,
     SaveRuleRequest,
     ParseRuleRequest,
     BatchEvaluateRequest,
-    ValidateWorkspaceRequest,
     ValidationResult as ValidationResultSchema,
     BatchValidationResponse,
     BatchSummary,
@@ -55,9 +60,103 @@ from xml_reader import parse_invoice_xml, extract_xml_tags
 BATCH_VALIDATION_TIMEOUT = 60  # 60 seconds timeout for batch validations
 PARSE_TIMEOUT = 30  # 30 seconds timeout for parsing
 MAX_XML_SIZE = 1_000_000  # 1MB max XML size
+
+SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL", os.getenv("SUPABASE_URL", "https://yppdggvilalihoeccznc.supabase.co")).strip()
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwcGRnZ3ZpbGFsaWhvZWNjem5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5ODkzNjcsImV4cCI6MjA5NDU2NTM2N30.u_jiDzvWDts_TZrKGyxvD70nUyBe9iL5ClqeQX3t5RI"))).strip()
+
+from supabase import create_client
+supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
 logger = logging.getLogger(__name__)
+
+async def ensure_defaults():
+    try:
+        # ── CHECK SAMPLE ──────────────────────────
+        sample_res = supabase.table("samples").select("id, filename, status").limit(1).execute()
+
+        if not sample_res.data:
+            default_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<Invoice>
+  <invoice_id>DEFAULT-001</invoice_id>
+  <issue_date>2026-01-01</issue_date>
+  <seller_name>Default Seller</seller_name>
+  <buyer_name>Default Buyer</buyer_name>
+  <currency_code>INR</currency_code>
+  <taxable_amount>0.00</taxable_amount>
+  <tax_amount>0.00</tax_amount>
+  <payable_amount>0.00</payable_amount>
+  <tax_category>S</tax_category>
+  <buyer_vat>00DEFAULT0000A1Z1</buyer_vat>
+  <purchase_order>PO-DEFAULT-0001</purchase_order>
+  <line_items/>
+</Invoice>"""
+
+            sample_insert = supabase.table("samples").insert({
+                "filename": "default.xml",
+                "xml_content": default_xml,
+                "status": "default",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "extracted_tags": [
+                    "invoice_id", "issue_date", "seller_name", "buyer_name",
+                    "currency_code", "taxable_amount", "tax_amount",
+                    "payable_amount", "tax_category", "buyer_vat",
+                    "purchase_order", "line_items"
+                ]
+            }).execute()
+            sample_id = sample_insert.data[0]["id"]
+        else:
+            sample_id = sample_res.data[0]["id"]
+
+        # ── CHECK XSLT FILE ───────────────────────
+        xslt_res = supabase.table("xslt_files").select("id, filename, status").limit(1).execute()
+
+        if not xslt_res.data:
+            default_xslt = """<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0"
+  xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:template match="/">
+    <!-- Default India Rules XSLT -->
+    <!-- Rules will be appended here -->
+  </xsl:template>
+</xsl:stylesheet>"""
+
+            import uuid
+            xslt_insert = supabase.table("xslt_files").insert({
+                "id": str(uuid.uuid4()),
+                "filename": "india_rules.xslt",
+                "description": "Default India validation rules",
+                "xslt_content": default_xslt,
+                "rules_count": 0,
+                "status": "default",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }).execute()
+            xslt_id = xslt_insert.data[0]["id"]
+        else:
+            xslt_id = xslt_res.data[0]["id"]
+
+        # ── LINK SAMPLE + XSLT ────────────────────
+        link_res = supabase.table("xslt_sample_links").select("id").eq("sample_id", sample_id).eq("xslt_id", xslt_id).limit(1).execute()
+
+        if not link_res.data:
+            supabase.table("xslt_sample_links").insert({
+                "sample_id": sample_id,
+                "xslt_id": xslt_id,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }).execute()
+
+        # ── SET ACTIVE WORKSPACE ──────────────────
+        workspace_res = supabase.table("active_workspace").select("id").limit(1).execute()
+
+        if not workspace_res.data:
+            supabase.table("active_workspace").insert({
+                "sample_id": sample_id,
+                "xslt_id": xslt_id,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }).execute()
+    except Exception as e:
+        logger.error(f"ensure_defaults failed: {e}")
 # ─── Rule text sanity guard ───────────────────────────────────────────────────
 
 _SUSPICIOUS_TOKENS = [
@@ -316,18 +415,21 @@ def _build_beautiful_report_pdf(details: dict) -> bytes:
     builder.draw_text("INVOICE VALIDATION REPORT", 50, 790, size=12, bold=True, color=(1, 1, 1))
 
     # --- Summary Box ---
-    builder.draw_rect(40, 700, 515, 70, 0.96, 0.97, 0.99, stroke=True)
+    builder.draw_rect(40, 685, 515, 85, 0.96, 0.97, 0.99, stroke=True)
     
     builder.draw_text("Invoice ID:", 55, 750, bold=True)
     builder.draw_text(details['invoice_identifier'], 130, 750)
 
-    builder.draw_text("Generated At:", 55, 735, bold=True)
-    gen_time = details.get('processed_at') or details.get('uploaded_at') or datetime.now(timezone.utc).isoformat()
-    builder.draw_text(gen_time, 130, 735)
+    builder.draw_text("XSLT File:", 55, 735, bold=True)
+    builder.draw_text(details.get('xslt_filename') or "N/A", 130, 735)
 
-    builder.draw_text("Checks Run:", 55, 720, bold=True)
+    builder.draw_text("Generated At:", 55, 720, bold=True)
+    gen_time = details.get('processed_at') or details.get('uploaded_at') or datetime.now(timezone.utc).isoformat()
+    builder.draw_text(gen_time, 130, 720)
+
+    builder.draw_text("Checks Run:", 55, 705, bold=True)
     summary_str = f"Total: {details['summary']['total']}  |  Passed: {details['summary']['passed']}  |  Failed: {details['summary']['failed']}  |  Errors: {details['summary']['errors']}"
-    builder.draw_text(summary_str, 130, 720)
+    builder.draw_text(summary_str, 130, 705)
 
     status = details['overall_status']
     if status == "PASS":
@@ -455,35 +557,29 @@ app.add_middleware(
 )
 
 
-# ─── Exception Middleware ─────────────────────────────────────────────────────
+# ─── Exception Handlers ───────────────────────────────────────────────────────
 
-@app.middleware("http")
-async def exception_middleware(request: Request, call_next):
-    """
-    Global exception handler middleware.
-    Prevents stacktrace leakage and sanitizes error responses.
-    """
-    try:
-        return await call_next(request)
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions as-is
-    except asyncio.TimeoutError:
-        logger.warning(f"Request timeout: {request.url.path}")
-        return JSONResponse(
-            status_code=504,
-            content={"detail": "Request timeout"},
-        )
-    except Exception as e:
-        logger.error(f"Unhandled exception: {type(e).__name__}: {str(e)[:100]}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error"},  # Don't leak details
-        )
+@app.exception_handler(asyncio.TimeoutError)
+async def timeout_exception_handler(request: Request, exc: asyncio.TimeoutError):
+    logger.warning(f"Request timeout: {request.url.path}")
+    return JSONResponse(
+        status_code=504,
+        content={"detail": "Request timeout"},
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {type(exc).__name__}: {str(exc)[:100]}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},  # Don't leak details
+    )
 
 
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+    await ensure_defaults()
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────
@@ -682,6 +778,7 @@ async def create_rule(body: SaveRuleRequest, db: AsyncSession = Depends(get_db))
             xpath_logic=structured.get("xpath"),
             python_logic=structured.get("python_logic"),
             is_active=True,
+            xslt_id=body.xslt_id,
         )
         db.add(new_rule)
         await db.commit()
@@ -956,6 +1053,11 @@ async def validate_all_rules(body: BatchEvaluateRequest, db: AsyncSession = Depe
         new_invoice.passed_count = len([r for r in out["results"] if r.get("status") == "PASS"])
         new_invoice.failed_count = len([r for r in out["results"] if r.get("status") == "FAIL"])
         new_invoice.processed_at = datetime.utcnow()
+        try:
+            ws_data = await get_active_workspace()
+            new_invoice.xslt_filename = ws_data.get("xslt_filename")
+        except Exception as e:
+            logger.warning(f"Failed to attach xslt_filename to inline invoice: {e}")
         
         await db.commit()
 
@@ -1152,6 +1254,12 @@ async def validate_stored_invoice(invoice_id: int, db: AsyncSession = Depends(ge
         invoice.failed_count = failed_count
         invoice.upload_status = "validated"
         invoice.processed_at = datetime.utcnow()
+        try:
+            ws_data = await get_active_workspace()
+            invoice.xslt_filename = ws_data.get("xslt_filename")
+        except Exception as e:
+            logger.warning(f"Failed to attach xslt_filename to invoice: {e}")
+
 
         report = FileValidationReport(
             file_id=invoice.id,
@@ -1222,6 +1330,7 @@ async def list_results(db: AsyncSession = Depends(get_db)):
                     "failed_rules": failed,
                     "error_rules": errors,
                     "execution_status": _safe_text(inv.upload_status or "unknown", max_len=40).upper(),
+                    "xslt_filename": inv.xslt_filename,
                 }
             )
         return out
@@ -1378,6 +1487,7 @@ async def report_details(invoice_id: int, db: AsyncSession = Depends(get_db)):
             "uploaded_at": invoice.uploaded_at.isoformat(),
             "processed_at": invoice.processed_at.isoformat() if invoice.processed_at else None,
             "execution_status": _safe_text(invoice.upload_status or "unknown", 40).upper(),
+            "xslt_filename": invoice.xslt_filename,
             "overall_status": _overall_status(total, passed, failed, errors),
             "summary": {
                 "total": total,
@@ -1408,24 +1518,27 @@ async def delete_report(invoice_id: int, db: AsyncSession = Depends(get_db)):
             await db.execute(select(Invoice).where(Invoice.id == invoice_id))
         ).scalar_one_or_none()
         if not invoice:
-            raise HTTPException(status_code=404, detail="Validation report not found")
+            # Idempotent delete — already gone, not an error
+            return {"message": "already deleted", "id": invoice_id}
 
+        # Manually delete related reports
         report_rows = (
             await db.execute(select(FileValidationReport).where(FileValidationReport.file_id == invoice_id))
         ).scalars().all()
         for report in report_rows:
             await db.delete(report)
 
+        # Manually delete related validation results
         validation_rows = (
             await db.execute(select(ValidationResultORM).where(ValidationResultORM.invoice_id == invoice_id))
         ).scalars().all()
-        if not validation_rows and not report_rows:
-            raise HTTPException(status_code=404, detail="Validation report already deleted")
         for row in validation_rows:
             await db.delete(row)
 
+        # Delete the invoice itself
+        await db.delete(invoice)
         await db.commit()
-        return {"message": "Validation report deleted", "id": invoice_id}
+        return {"message": "deleted", "id": invoice_id}
     except HTTPException:
         raise
     except Exception as e:
@@ -1455,12 +1568,852 @@ async def download_report_pdf(invoice_id: int, db: AsyncSession = Depends(get_db
         raise HTTPException(status_code=500, detail="Failed to generate PDF report")
 
 
+def _generate_single_pdf(details: dict) -> bytes:
+    output = BytesIO()
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib import colors
+    except ImportError:
+        raise HTTPException(status_code=500, detail="reportlab not installed on server")
+
+    doc = SimpleDocTemplate(output, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("INVOICE VALIDATION REPORT", styles['Title']))
+    elements.append(Spacer(1, 12))
+
+    xslt_filename = details.get('xslt_filename') or 'N/A'
+    elements.append(Paragraph(f"<b>XSLT File:</b> {xslt_filename}", styles['Normal']))
+    elements.append(Paragraph(f"<b>Invoice ID:</b> {details['invoice_identifier']}", styles['Normal']))
+    
+    gen_time = details.get('processed_at') or details.get('uploaded_at') or datetime.now(timezone.utc).isoformat()
+    elements.append(Paragraph(f"<b>Generated At:</b> {gen_time}", styles['Normal']))
+    elements.append(Spacer(1, 20))
+
+    data = [["Rule Name", "Status", "Message"]]
+    for item in details["checklist"]:
+        data.append([
+            item.get("rule_text") or "",
+            item.get("status") or "FAIL",
+            item.get("message") or ""
+        ])
+
+    table_data = []
+    for i, row in enumerate(data):
+        if i == 0:
+            table_data.append(row)
+        else:
+            table_data.append([
+                Paragraph(row[0], styles['Normal']),
+                row[1],
+                Paragraph(row[2], styles['Normal'])
+            ])
+
+    t = Table(table_data, colWidths=[230, 60, 230])
+    t_style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#f8f9fa")),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor("#dee2e6")),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ])
+
+    for i, item in enumerate(details["checklist"]):
+        row_idx = i + 1
+        if item.get("status") == "PASS":
+            t_style.add('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor("#2e7d32"))
+            t_style.add('FONTNAME', (1, row_idx), (1, row_idx), 'Helvetica-Bold')
+        else:
+            t_style.add('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor("#c62828"))
+            t_style.add('FONTNAME', (1, row_idx), (1, row_idx), 'Helvetica-Bold')
+
+    t.setStyle(t_style)
+    elements.append(t)
+    doc.build(elements)
+    return output.getvalue()
+
+
+@app.get("/api/results/{invoice_id}/pdf")
+async def download_reportlab_pdf(invoice_id: int, db: AsyncSession = Depends(get_db)):
+    """Generate PDF using reportlab with XSLT filename and PASS/FAIL table."""
+    if invoice_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid invoice ID")
+    try:
+        details = await report_details(invoice_id, db)
+        pdf_bytes = _generate_single_pdf(details)
+        safe_name = _PDF_FILENAME_SANITIZER.sub("-", details["invoice_identifier"]).strip("-") or f"INV-{invoice_id}"
+        filename = f"{safe_name}-validation-report.pdf"
+        
+        return StreamingResponse(
+            BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"ReportLab PDF generation failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to generate PDF report")
+
+
+@app.get("/api/results/export-zip")
+async def download_all_results_zip(db: AsyncSession = Depends(get_db)):
+    """Group all validated invoice results PDFs into a single ZIP and download."""
+    try:
+        invoices = (
+            await db.execute(select(Invoice).order_by(Invoice.processed_at.desc(), Invoice.uploaded_at.desc()).limit(200))
+        ).scalars().all()
+
+        if not invoices:
+            raise HTTPException(status_code=404, detail="No validated invoices found to export")
+
+        zip_buffer = BytesIO()
+        seen_names = set()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for inv in invoices:
+                try:
+                    details = await report_details(inv.id, db)
+                    pdf_bytes = _generate_single_pdf(details)
+                    safe_name = _PDF_FILENAME_SANITIZER.sub("-", details["invoice_identifier"]).strip("-") or f"INV-{inv.id}"
+                    base_pdf_name = f"{safe_name}-validation-report.pdf"
+                    pdf_name = base_pdf_name
+                    counter = 1
+                    while pdf_name in seen_names:
+                        pdf_name = f"{safe_name}-validation-report({counter}).pdf"
+                        counter += 1
+                    seen_names.add(pdf_name)
+                    zf.writestr(pdf_name, pdf_bytes)
+                except Exception as ex:
+                    logger.warning(f"Skipping PDF for invoice {inv.id} in ZIP export: {ex}")
+
+        zip_buffer.seek(0)
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="validated-invoice-results.zip"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"ZIP export failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to generate ZIP export")
+
+
+# ─── Sample Management ────────────────────────────────────────────────────────
+
+@app.post("/api/sample-upload")
+async def upload_sample(file: UploadFile = File(...)):
+    """Upload a sample XML file, extract tags, store in Supabase."""
+    try:
+        if not file.filename.endswith(".xml"):
+            raise HTTPException(status_code=400, detail="Only .xml files accepted")
+
+        content = await file.read()
+        if len(content) > MAX_XML_SIZE:
+            raise HTTPException(status_code=413, detail=f"File too large (max {MAX_XML_SIZE} bytes)")
+
+        xml_str = content.decode("utf-8", errors="replace")
+
+        # Validate XML
+        try:
+            from lxml import etree as _etree
+            _etree.fromstring(xml_str.encode())
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid XML file: {str(e)[:80]}")
+
+        # Extract tags
+        tags_result = extract_xml_tags(xml_str)
+        tags_list = tags_result.get("known_tags", []) + tags_result.get("unknown_tags", [])
+
+        # Store in Supabase directly
+        sample_insert = supabase.table("samples").insert({
+            "filename": file.filename,
+            "xml_content": xml_str,
+            "extracted_tags": tags_list,
+            "status": "active"
+        }).execute()
+        new_sample_id = sample_insert.data[0]["id"]
+
+        # Also update active workspace to point to this new sample!
+        try:
+            ws_res = supabase.table("active_workspace").select("id").limit(1).execute()
+            if ws_res.data:
+                supabase.table("active_workspace").update({"sample_id": new_sample_id}).eq("id", ws_res.data[0]["id"]).execute()
+            else:
+                supabase.table("active_workspace").insert({"sample_id": new_sample_id}).execute()
+        except Exception as e:
+            logger.warning(f"Failed to update active workspace sample_id: {e}")
+
+        return {
+            "sample_id": new_sample_id,
+            "filename": file.filename,
+            "tags": tags_list,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Sample upload failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Sample upload failed")
+
+
+@app.get("/api/sample/current")
+async def get_current_sample():
+    """Get the most recently created sample from Supabase."""
+    try:
+        res = supabase.table("samples").select("id, filename, extracted_tags, status").order("created_at", desc=True).limit(1).execute()
+        if not res.data:
+            return {"sample_id": None, "filename": None, "extracted_tags": []}
+        
+        sample = res.data[0]
+        return {
+            "sample_id": sample["id"],
+            "filename": sample["filename"],
+            "extracted_tags": sample.get("extracted_tags") or [],
+        }
+    except Exception as e:
+        logger.error(f"Failed to get current sample: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to get current sample")
+
+
+@app.get("/api/workspace/active")
+async def get_active_workspace():
+    try:
+        workspace = supabase.table("active_workspace").select("sample_id, xslt_id").limit(1).execute()
+
+        if not workspace.data:
+            await ensure_defaults()
+            workspace = supabase.table("active_workspace").select("sample_id, xslt_id").limit(1).execute()
+
+        if not workspace.data:
+            # Return empty workspace if nothing is set
+            return {
+                "sample_id": None,
+                "sample_filename": None,
+                "xslt_id": None,
+                "xslt_filename": None,
+                "extracted_tags": [],
+                "status": "empty"
+            }
+
+        row = workspace.data[0]
+        
+        # Safely fetch sample if ID exists
+        sample = None
+        if row.get("sample_id"):
+            try:
+                sample_result = supabase.table("samples").select("id, filename, extracted_tags, status").eq("id", row["sample_id"]).execute()
+                sample = sample_result.data[0] if sample_result.data else None
+            except Exception as e:
+                logger.warning(f"Failed to fetch sample {row.get('sample_id')}: {e}")
+        
+        # Safely fetch xslt if ID exists
+        xslt = None
+        if row.get("xslt_id"):
+            try:
+                xslt_result = supabase.table("xslt_files").select("id, filename, status").eq("id", row["xslt_id"]).execute()
+                xslt = xslt_result.data[0] if xslt_result.data else None
+            except Exception as e:
+                logger.warning(f"Failed to fetch xslt {row.get('xslt_id')}: {e}")
+
+        return {
+            "sample_id": sample["id"] if sample else None,
+            "sample_filename": sample["filename"] if sample else None,
+            "xslt_id": xslt["id"] if xslt else None,
+            "xslt_filename": xslt["filename"] if xslt else None,
+            "extracted_tags": (sample.get("extracted_tags") or []) if sample else [],
+            "status": sample.get("status") if sample else "empty"
+        }
+    except Exception as e:
+        logger.error(f"Failed to get active workspace: {str(e)[:100]}")
+        # Return empty workspace instead of throwing error
+        return {
+            "sample_id": None,
+            "sample_filename": None,
+            "xslt_id": None,
+            "xslt_filename": None,
+            "extracted_tags": [],
+            "status": "error"
+        }
+
+
+@app.put("/api/workspace/active")
+async def update_active_workspace(body: UpdateWorkspaceRequest):
+    try:
+        ws_res = supabase.table("active_workspace").select("id").limit(1).execute()
+        if not ws_res.data:
+            await ensure_defaults()
+            ws_res = supabase.table("active_workspace").select("id").limit(1).execute()
+        
+        ws_id = ws_res.data[0]["id"]
+        update_data = {}
+
+        if body.sample_id is not None:
+            update_data["sample_id"] = body.sample_id
+            # STATUS UPDATES ON REAL SELECTION
+            try:
+                supabase.table("samples").update({ "status": "active" }).eq("id", body.sample_id).execute()
+            except Exception as e:
+                logger.warning(f"Supabase sample status update failed: {e}")
+
+        if body.xslt_id is not None:
+            update_data["xslt_id"] = body.xslt_id
+            # Ensure xslt_file exists in Supabase xslt_files table
+            try:
+                xslt_check = supabase.table("xslt_files").select("id").eq("id", body.xslt_id).execute()
+                if not xslt_check.data and body.xslt_filename:
+                    supabase.table("xslt_files").insert({
+                        "id": body.xslt_id,
+                        "filename": body.xslt_filename,
+                        "status": "active",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }).execute()
+                else:
+                    # STATUS UPDATES ON REAL SELECTION
+                    supabase.table("xslt_files").update({ "status": "active" }).eq("id", body.xslt_id).execute()
+            except Exception as e:
+                logger.warning(f"Supabase xslt_files check/update failed: {e}")
+
+        if update_data:
+            supabase.table("active_workspace").update(update_data).eq("id", ws_id).execute()
+
+        return await get_active_workspace()
+    except Exception as e:
+        logger.error(f"Failed to update active workspace: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to update active workspace")
+
+
+@app.get("/api/samples")
+async def list_samples():
+    """List all uploaded sample XMLs from Supabase."""
+    try:
+        res = supabase.table("samples").select("id, filename, created_at, status").order("created_at", desc=True).execute()
+        return [
+            {
+                "id": s["id"],
+                "filename": s["filename"],
+                "created_at": s.get("created_at") or datetime.utcnow().isoformat(),
+                "status": s.get("status") or "default"
+            }
+            for s in res.data
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list samples: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to list samples")
+
+
+@app.post("/api/link")
+async def link_sample_to_xslt(body: dict):
+    """Link a sample XML to an XSLT file in Supabase."""
+    try:
+        sample_id = body.get("sample_id")
+        xslt_file_id = body.get("xslt_id")
+
+        if not sample_id or not xslt_file_id:
+            raise HTTPException(status_code=400, detail="sample_id and xslt_id required")
+
+        # Delete any existing link for this sample OR this XSLT file
+        try:
+            existing = supabase.table("xslt_sample_links").select("id").eq("sample_id", sample_id).execute()
+            for link in existing.data:
+                supabase.table("xslt_sample_links").delete().eq("id", link["id"]).execute()
+                
+            existing_xslt = supabase.table("xslt_sample_links").select("id").eq("xslt_id", xslt_file_id).execute()
+            for link in existing_xslt.data:
+                supabase.table("xslt_sample_links").delete().eq("id", link["id"]).execute()
+        except Exception as e:
+            logger.warning(f"Supabase link cleanup warning: {e}")
+
+        # Create new link
+        supabase.table("xslt_sample_links").insert({
+            "sample_id": sample_id,
+            "xslt_id": str(xslt_file_id),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+
+        # Also update active workspace
+        try:
+            ws_res = supabase.table("active_workspace").select("id").limit(1).execute()
+            if ws_res.data:
+                supabase.table("active_workspace").update({
+                    "sample_id": sample_id,
+                    "xslt_id": str(xslt_file_id)
+                }).eq("id", ws_res.data[0]["id"]).execute()
+        except Exception as e:
+            logger.warning(f"Active workspace sync warning: {e}")
+
+        return {
+            "message": "Sample linked to XSLT",
+            "sample_id": sample_id,
+            "xslt_id": xslt_file_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Link failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to link sample to XSLT")
+
+
+
+
+
+
+
+@app.get("/api/results/{id}/tags")
+async def get_result_tags(id: int, db: AsyncSession = Depends(get_db)):
+    """Extract XML tags from the validated invoice content associated with a validation result ID."""
+    try:
+        # Get ValidationResult by ID to fetch the associated invoice_id
+        val_result = (
+            await db.execute(select(ValidationResultORM).where(ValidationResultORM.id == id))
+        ).scalars().first()
+        if not val_result:
+            raise HTTPException(status_code=404, detail="Validation result not found")
+        
+        invoice_id = val_result.invoice_id
+        invoice = (
+            await db.execute(select(Invoice).where(Invoice.id == invoice_id))
+        ).scalars().first()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        tags_result = extract_xml_tags(invoice.xml_content or "")
+        tags_list = [t["tag"] for t in tags_result.get("tags", [])]
+        return {"tags": list(sorted(set(tags_list)))}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get result tags: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to get result tags")
+
+
+@app.get("/api/results/{id}/rules")
+async def get_result_rules(id: int, db: AsyncSession = Depends(get_db)):
+    """Return all rules and their validation statuses evaluated during the same validation run as result ID."""
+    try:
+        # Get ValidationResult by ID to find the validation run (invoice_id)
+        val_result = (
+            await db.execute(select(ValidationResultORM).where(ValidationResultORM.id == id))
+        ).scalars().first()
+        if not val_result:
+            raise HTTPException(status_code=404, detail="Validation result not found")
+        
+        invoice_id = val_result.invoice_id
+        results = (
+            await db.execute(
+                select(ValidationResultORM).where(ValidationResultORM.invoice_id == invoice_id)
+            )
+        ).scalars().all()
+        
+        rules_list = []
+        for r in results:
+            rules_list.append({
+                "rule_name": r.rule_text,
+                "status": "PASS" if r.status == "PASS" else "FAIL"
+            })
+        return {"rules": rules_list}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get result rules: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to get result rules")
+
+
+@app.get("/api/xslt-files/{id:path}/details")
+async def get_xslt_details(id: str, db: AsyncSession = Depends(get_db)):
+    """Return XSLT filename, linked sample XML filename, list of all rules, XSLT previews, and related logic under this XSLT file."""
+    try:
+        # Get XSLT file entry
+        xslt = (
+            await db.execute(select(XsltFile).where(XsltFile.id == id))
+        ).scalars().first()
+        xslt_filename = xslt.filename if xslt else id
+        
+        # Get linked sample file name
+        sample_filename = "N/A"
+        link = (
+            await db.execute(select(XsltSampleLink).where(XsltSampleLink.xslt_file_id == id))
+        ).scalars().first()
+        if link:
+            sample = (
+                await db.execute(select(Sample).where(Sample.id == link.sample_id))
+            ).scalars().first()
+            if sample:
+                sample_filename = sample.filename
+                
+        # Get all rules created under this XSLT
+        rules_result = (
+            await db.execute(select(Rule).where(Rule.xslt_id == id, Rule.is_active == True).order_by(Rule.created_at.asc()))
+        ).scalars().all()
+        
+        rules_list = []
+        xslt_previews = []
+        related_logic = []
+
+        for r in rules_result:
+            rules_list.append({
+                "rule_name": r.rule_text,
+                "severity": r.severity,
+                "field": r.field,
+                "operation": r.operation
+            })
+            if r.xslt_logic:
+                xslt_previews.append(f"<!-- Rule: {r.rule_text} -->\n{r.xslt_logic}")
+            related_logic.append({
+                "rule_id": r.id,
+                "rule_text": r.rule_text,
+                "xslt_logic": r.xslt_logic,
+                "xpath_logic": r.xpath_logic,
+                "python_logic": r.python_logic,
+                "severity": r.severity,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            })
+        
+        return {
+            "xslt_filename": xslt_filename,
+            "sample_filename": sample_filename,
+            "rules": rules_list,
+            "xslt_previews": xslt_previews,
+            "related_logic": related_logic,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get XSLT details: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to get XSLT details")
+
+
+@app.get("/api/xslt-files/{id:path}/download-package")
+async def download_xslt_package(id: str, db: AsyncSession = Depends(get_db)):
+    """Package and download everything related to an XSLT rule sheet as a structured ZIP."""
+    try:
+        xslt = (
+            await db.execute(select(XsltFile).where(XsltFile.id == id))
+        ).scalars().first()
+        xslt_filename = xslt.filename if xslt else id
+        safe_name = xslt_filename.replace(".xslt", "").replace(" ", "-")
+
+
+        rules_result = (
+            await db.execute(select(Rule).where(Rule.xslt_id == id, Rule.is_active == True).order_by(Rule.created_at.asc()))
+        ).scalars().all()
+
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            # 1. Main rules summary JSON
+            summary = {
+                "xslt_filename": xslt_filename,
+                "xslt_id": id,
+                "exported_at": datetime.utcnow().isoformat(),
+                "total_rules": len(rules_result),
+                "rules": [
+                    {
+                        "rule_id": r.id,
+                        "rule_text": r.rule_text,
+                        "severity": r.severity,
+                        "xslt_logic": r.xslt_logic,
+                        "xpath_logic": r.xpath_logic,
+                        "python_logic": r.python_logic,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                    for r in rules_result
+                ]
+            }
+            zf.writestr(f"{safe_name}-metadata.json", json.dumps(summary, indent=2))
+
+            # 2. Individual XSLT rule blocks and combined logic
+            combined_xslt_blocks = []
+            rules_dir = "rules_logic/"
+            for idx, r in enumerate(rules_result):
+                rule_num = idx + 1
+                if r.xslt_logic:
+                    zf.writestr(f"{rules_dir}rule_{rule_num}_xslt.xml", r.xslt_logic)
+                    combined_xslt_blocks.append(f"<!-- Rule {rule_num}: {r.rule_text} -->\n{r.xslt_logic}")
+                if r.xpath_logic:
+                    zf.writestr(f"{rules_dir}rule_{rule_num}_xpath.txt", r.xpath_logic)
+                if r.python_logic:
+                    zf.writestr(f"{rules_dir}rule_{rule_num}_python.py", r.python_logic)
+
+            combined_xslt = f'<?xml version="1.0" encoding="UTF-8"?>\n<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">\n  <xsl:template match="/">\n    <validation_results>\n' + "\n".join(combined_xslt_blocks) + '\n    </validation_results>\n  </xsl:template>\n</xsl:stylesheet>'
+            zf.writestr(f"{safe_name}-combined.xslt", combined_xslt)
+
+        zip_buffer.seek(0)
+        filename = f"{safe_name}-rule-sheet-package.zip"
+        return StreamingResponse(
+            zip_buffer, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        logger.error(f"Package download failed: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to generate download package")
+
+
+def _build_beautiful_xslt_pdf_lowlevel(filename: str, rules: list, xslt_content: str, xslt_previews: list) -> bytes:
+    builder = LowLevelPDFBuilder()
+    builder.new_page()
+
+    # Title Banner
+    builder.draw_rect(40, 780, 515, 30, 0.08, 0.15, 0.35)
+    builder.draw_text("XSLT RULE SHEET & TEMPLATE PREVIEW", 50, 790, size=12, bold=True, color=(1, 1, 1))
+
+    # Metadata Box
+    builder.draw_rect(40, 705, 515, 65, 0.96, 0.97, 0.99, stroke=True)
+    builder.draw_text("XSLT Filename:", 55, 745, bold=True, color=(0.2, 0.2, 0.2))
+    builder.draw_text(_safe_text(filename, 60), 150, 745, color=(0.1, 0.1, 0.1))
+
+    builder.draw_text("Total Rules:", 55, 730, bold=True, color=(0.2, 0.2, 0.2))
+    builder.draw_text(str(len(rules)), 150, 730, color=(0.1, 0.1, 0.1))
+
+    builder.draw_text("Exported At:", 55, 715, bold=True, color=(0.2, 0.2, 0.2))
+    builder.draw_text(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'), 150, 715, color=(0.1, 0.1, 0.1))
+
+    y = 680
+    builder.draw_text("ASSOCIATED RULES SUMMARY", 40, y, size=10, bold=True, color=(0.1, 0.15, 0.3))
+    builder.draw_line(40, y - 4, 555, y - 4, r=0.7, g=0.7, b=0.7)
+    y -= 20
+
+    if not rules:
+        builder.draw_text("No active rules associated with this XSLT file.", 40, y, size=9, color=(0.4, 0.4, 0.4))
+        y -= 25
+    else:
+        for idx, r_obj in enumerate(rules):
+            if isinstance(r_obj, dict):
+                r_text = r_obj.get("rule_name", "") or r_obj.get("rule_text", "")
+                sev = r_obj.get("severity", "High") or "High"
+                field_op = f"{r_obj.get('field') or 'N/A'} / {r_obj.get('operation') or 'N/A'}"
+            else:
+                r_text = str(r_obj)
+                sev = "High"
+                field_op = "N/A / N/A"
+
+            lines = builder.wrap_text(r_text, 320, size=9)
+            block_height = len(lines) * 12 + 12
+
+            if y - block_height < 50:
+                builder.new_page()
+                y = 780
+
+            builder.draw_rect(40, y - block_height, 515, block_height, 0.98, 0.98, 0.99, stroke=True)
+            builder.draw_text(f"#{idx + 1}", 48, y - 14, size=9, bold=True, color=(0.3, 0.4, 0.8))
+
+            for l_idx, line in enumerate(lines):
+                builder.draw_text(line, 75, y - 14 - (l_idx * 12), size=9, color=(0.15, 0.15, 0.15))
+
+            builder.draw_text(f"Sev: {str(sev).upper()}", 410, y - 14, size=8, bold=True, color=(0.6, 0.2, 0.2))
+            builder.draw_text(builder.wrap_text(field_op, 130, size=8)[0], 410, y - 26, size=8, color=(0.4, 0.4, 0.4))
+
+            y -= block_height + 8
+
+    y -= 15
+    if y - 40 < 50:
+        builder.new_page()
+        y = 780
+
+    builder.draw_text("COMBINED XSLT TEMPLATE PREVIEW", 40, y, size=10, bold=True, color=(0.1, 0.15, 0.3))
+    builder.draw_line(40, y - 4, 555, y - 4, r=0.7, g=0.7, b=0.7)
+    y -= 20
+
+    code_text = ""
+    if xslt_previews:
+        code_text = "\n\n".join(xslt_previews)
+    elif xslt_content:
+        code_text = xslt_content
+    else:
+        code_text = "<!-- No XSLT content available -->"
+
+    code_lines = []
+    for raw_line in code_text.splitlines():
+        wrapped = builder.wrap_text(raw_line, 500, size=7)
+        code_lines.extend(wrapped)
+
+    for line in code_lines:
+        if y < 50:
+            builder.new_page()
+            y = 780
+        builder.draw_text(line, 45, y, size=7, color=(0.1, 0.25, 0.2))
+        y -= 10
+
+    return builder.build()
+
+
+def _build_beautiful_xslt_pdf_reportlab(filename: str, rules: list, xslt_content: str, xslt_previews: list) -> bytes:
+    output = BytesIO()
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib import colors
+
+    doc = SimpleDocTemplate(output, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # Title & Header
+    elements.append(Paragraph("XSLT RULE SHEET & TEMPLATE PREVIEW", styles['Title']))
+    elements.append(Spacer(1, 15))
+
+    elements.append(Paragraph(f"<b>XSLT Filename:</b> {_safe_text(filename)}", styles['Normal']))
+    elements.append(Paragraph(f"<b>Total Rules:</b> {len(rules)}", styles['Normal']))
+    elements.append(Paragraph(f"<b>Exported At:</b> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}", styles['Normal']))
+    elements.append(Spacer(1, 20))
+
+    # Rules Summary Table
+    elements.append(Paragraph("<b>ASSOCIATED RULES SUMMARY</b>", styles['Heading2']))
+    elements.append(Spacer(1, 10))
+
+    if rules:
+        table_data = [["#", "Rule Description", "Severity", "Field / Operation"]]
+        for idx, r_obj in enumerate(rules):
+            if isinstance(r_obj, dict):
+                r_text = r_obj.get("rule_name", "") or r_obj.get("rule_text", "")
+                sev = r_obj.get("severity", "High") or "High"
+                field_op = f"{r_obj.get('field') or 'N/A'} / {r_obj.get('operation') or 'N/A'}"
+            else:
+                r_text = str(r_obj)
+                sev = "High"
+                field_op = "N/A / N/A"
+
+            table_data.append([
+                str(idx + 1),
+                Paragraph(_safe_text(r_text, 300), styles['Normal']),
+                str(sev).upper(),
+                Paragraph(_safe_text(field_op, 100), styles['Normal'])
+            ])
+
+        t = Table(table_data, colWidths=[30, 260, 70, 180])
+        t_style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1e293b")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#f8f9fa")),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, -1), 8),
+        ])
+        t.setStyle(t_style)
+        elements.append(t)
+    else:
+        elements.append(Paragraph("<i>No active rules associated with this XSLT file.</i>", styles['Normal']))
+
+    elements.append(Spacer(1, 25))
+
+    # Combined XSLT Preview
+    elements.append(Paragraph("<b>COMBINED XSLT TEMPLATE PREVIEW</b>", styles['Heading2']))
+    elements.append(Spacer(1, 10))
+
+    code_text = ""
+    if xslt_previews:
+        code_text = "\n\n".join(xslt_previews)
+    elif xslt_content:
+        code_text = xslt_content
+    else:
+        code_text = "<!-- No XSLT content available -->"
+
+    code_style = ParagraphStyle(
+        'CodeStyle',
+        parent=styles['Normal'],
+        fontName='Courier',
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor("#0f172a"),
+        backColor=colors.HexColor("#f1f5f9"),
+        borderColor=colors.HexColor("#cbd5e1"),
+        borderWidth=1,
+        borderPadding=10,
+        spaceBefore=5,
+        spaceAfter=15
+    )
+
+    formatted_code = code_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>").replace(" ", "&#160;")
+    elements.append(Paragraph(formatted_code, code_style))
+
+    doc.build(elements)
+    return output.getvalue()
+
+
+@app.get("/api/xslt-files/{id:path}/pdf")
+async def download_xslt_pdf(id: str, db: AsyncSession = Depends(get_db)):
+    """Generate and download a beautifully organized PDF containing the XSLT Rule Sheet summary, rules list, and complete XSLT template preview."""
+    try:
+        xslt = (
+            await db.execute(select(XsltFile).where(XsltFile.id == id))
+        ).scalars().first()
+        xslt_filename = xslt.filename if xslt else id
+        safe_name = xslt_filename.replace(".xslt", "").replace(" ", "-")
+
+        rules_result = (
+            await db.execute(select(Rule).where(Rule.xslt_id == id, Rule.is_active == True).order_by(Rule.created_at.asc()))
+        ).scalars().all()
+
+        rules_list = [{"rule_name": r.rule_text, "severity": r.severity, "field": r.field, "operation": r.operation} for r in rules_result]
+        xslt_previews = [f"<!-- Rule {idx+1}: {r.rule_text} -->\n{r.xslt_logic}" for idx, r in enumerate(rules_result) if r.xslt_logic]
+
+        try:
+            pdf_bytes = _build_beautiful_xslt_pdf_reportlab(xslt_filename, rules_list, "", xslt_previews)
+        except ImportError:
+            logger.warning("reportlab not installed, falling back to LowLevelPDFBuilder for XSLT PDF")
+            pdf_bytes = _build_beautiful_xslt_pdf_lowlevel(xslt_filename, rules_list, "", xslt_previews)
+
+        pdf_filename = f"{safe_name}-rule-sheet-preview.pdf"
+        return StreamingResponse(
+            BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{pdf_filename}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"XSLT PDF generation failed (GET): {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to generate XSLT preview PDF")
+
+
+@app.post("/api/xslt-files/{id:path}/pdf")
+async def download_xslt_pdf_post(id: str, body: dict, db: AsyncSession = Depends(get_db)):
+    """Generate and download a beautifully organized PDF from frontend-provided rules and XSLT content."""
+    try:
+        filename = body.get("filename") or id
+        rules = body.get("rules") or []
+        xslt_content = body.get("xslt_content") or ""
+        xslt_previews = body.get("xslt_previews") or []
+
+        safe_name = filename.replace(".xslt", "").replace(" ", "-")
+
+        try:
+            pdf_bytes = _build_beautiful_xslt_pdf_reportlab(filename, rules, xslt_content, xslt_previews)
+        except ImportError:
+            logger.warning("reportlab not installed, falling back to LowLevelPDFBuilder for XSLT PDF")
+            pdf_bytes = _build_beautiful_xslt_pdf_lowlevel(filename, rules, xslt_content, xslt_previews)
+
+        pdf_filename = f"{safe_name}-rule-sheet-preview.pdf"
+        return StreamingResponse(
+            BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{pdf_filename}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"XSLT PDF generation failed (POST): {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to generate XSLT preview PDF")
+
+
+
+
+
 # ─── Dashboard ────────────────────────────────────────────────────────────────
 
 @app.get("/dashboard/stats", response_model=DashboardStats)
 async def dashboard_stats(db: AsyncSession = Depends(get_db)):
     """Get dashboard statistics."""
     try:
+        # Sequential queries with explicit await and safe default counts
         total_rules = (await db.execute(select(func.count(Rule.id)))).scalar() or 0
         total_inv   = (await db.execute(select(func.count(Invoice.id)))).scalar() or 0
         total_val   = (await db.execute(select(func.count(ValidationResultORM.id)))).scalar() or 0
@@ -1470,8 +2423,13 @@ async def dashboard_stats(db: AsyncSession = Depends(get_db)):
         failed      = (await db.execute(
             select(func.count(ValidationResultORM.id)).where(ValidationResultORM.status == "FAIL")
         )).scalar() or 0
+        
+        # Query total_xslt_files from XsltFile table safely
+        total_xslt  = (await db.execute(select(func.count(XsltFile.id)))).scalar() or 0
 
+        # Guard every division to prevent ZeroDivisionError
         pass_rate = round((passed / total_val * 100), 1) if total_val > 0 else 0.0
+        fail_rate = round((failed / total_val * 100), 1) if total_val > 0 else 0.0
 
         return {
             "total_rules":       total_rules,
@@ -1480,10 +2438,23 @@ async def dashboard_stats(db: AsyncSession = Depends(get_db)):
             "total_passed":      passed,
             "total_failed":      failed,
             "pass_rate":         pass_rate,
+            "total_xslt_files":  total_xslt,
+            "fail_rate":         fail_rate,
         }
     except Exception as e:
-        logger.error(f"Failed to get stats: {str(e)[:100]}")
-        raise HTTPException(status_code=500, detail="Failed to get stats")
+        # Server-side logging of the traceback/error
+        logger.error(f"Database error in dashboard_stats: {str(e)}", exc_info=True)
+        # Always return a valid JSON response with zeroed stats on any database error instead of raising 500
+        return {
+            "total_rules":       0,
+            "total_invoices":    0,
+            "total_validations": 0,
+            "total_passed":      0,
+            "total_failed":      0,
+            "pass_rate":         0.0,
+            "total_xslt_files":  0,
+            "fail_rate":         0.0,
+        }
 
 
 @app.post("/upload-sample-xml")
