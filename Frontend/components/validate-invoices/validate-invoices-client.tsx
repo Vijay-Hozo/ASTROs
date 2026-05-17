@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { DesktopSidebar, MobileSidebar } from "@/components/rule-engine/sidebar";
-import Header from "@/components/rule-engine/header";
+import { DesktopSidebar, MobileSidebar } from "@/components/dashboard/sidebar";
+import Header from "@/components/dashboard/header";
 import ValidateInvoicesShell from "@/components/validate-invoices/validate-invoices-shell";
 
 export default function ValidateInvoicesClient() {

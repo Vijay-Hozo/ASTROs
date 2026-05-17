@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { DesktopSidebar, MobileSidebar } from "../rule-engine/sidebar";
-import Header from "../rule-engine/header";
+import { DesktopSidebar, MobileSidebar } from "../dashboard/sidebar";
+import Header from "../dashboard/header";
 import StatsCards from "./stats-cards";
 import RulesTable from "./rules-table";
 import RuleDetailDrawer from "./rule-detail-drawer";

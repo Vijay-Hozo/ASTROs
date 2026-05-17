@@ -25,6 +25,14 @@ export interface APIResponse<T> {
   success: boolean;
 }
 
+export interface XmlTag {
+  tag: string;
+  xpath: string;
+  sample_value: string;
+  inferred_type: "numeric" | "date" | "string";
+  canonical_field: string | null;
+}
+
 // ============================================================================
 // Error Handling
 // ============================================================================
@@ -374,4 +382,36 @@ export async function checkAPIHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+const API_BASE_URL = API_BASE;
+
+export async function uploadSampleXml(file: File): Promise<{
+  tags: XmlTag[];
+  known_tags: XmlTag[];
+  unknown_tags: XmlTag[];
+  total: number;
+}> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/upload-sample-xml`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to parse XML file.");
+  }
+
+  return response.json();
+}
+
+export async function resolveTag(rawTag: string, canonicalField: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/resolve-tag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw_tag: rawTag, canonical_field: canonicalField }),
+  });
 }

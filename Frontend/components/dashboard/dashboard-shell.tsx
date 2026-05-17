@@ -30,6 +30,7 @@ import { apiClient } from "@/lib/api-client";
 import { ErrorAlert } from "../ui/error-alert";
 import { StatsCardLoadingSkeleton } from "../ui/loading-skeleton";
 import type { DashboardStats, ParseRuleResponse } from "@/lib/types";
+import { XmlTagChips } from "./xml-tag-chips";
 
 export default function DashboardShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -55,6 +56,7 @@ export default function DashboardShell() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const ruleTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Memoize options to prevent infinite loops
   const dashboardOptions = useMemo(() => ({
@@ -613,7 +615,30 @@ export default function DashboardShell() {
                 <div className="flex-1 flex flex-col justify-between space-y-4">
                   {/* Always visible input area */}
                   <div className="space-y-4">
+                    <XmlTagChips
+                      onTagClick={(tag) => {
+                        const textarea = ruleTextareaRef.current;
+                        if (!textarea) return;
+                        const start = textarea.selectionStart ?? textarea.value.length;
+                        const end = textarea.selectionEnd ?? textarea.value.length;
+                        const before = textarea.value.slice(0, start);
+                        const after = textarea.value.slice(end);
+                        const separator = before.length > 0 && !before.endsWith(" ") ? " " : "";
+                        const newValue = `${before}${separator}${tag}${after}`;
+                        
+                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                          window.HTMLTextAreaElement.prototype, "value"
+                        )?.set;
+                        nativeInputValueSetter?.call(textarea, newValue);
+                        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+                        textarea.focus();
+                        const newCursor = start + separator.length + tag.length;
+                        textarea.setSelectionRange(newCursor, newCursor);
+                        setRuleText(newValue);
+                      }}
+                    />
                     <textarea
+                      ref={ruleTextareaRef}
                       value={ruleText}
                       onChange={(e) => setRuleText(e.target.value)}
                       disabled={parseLoading}

@@ -7,6 +7,20 @@ def build_xslt(structured_rule: dict) -> str:
     """
     Takes a structured rule dict from LLM and returns a complete XSLT string.
     """
+    parsed_rule = structured_rule
+    # Handle direct XML tags from user-uploaded sample
+    if parsed_rule.get("is_direct_tag") is True:
+        tag = parsed_rule.get("field", "")
+        xpath = parsed_rule.get("xpath", f"/Invoice/{tag}")
+        rule_type = parsed_rule.get("rule_type", "presence")
+        return generate_direct_tag_xslt(
+            tag=tag,
+            rule_type=rule_type,
+            xpath=xpath,
+            operator=parsed_rule.get("operator"),
+            value=parsed_rule.get("value"),
+        )
+
     # Create a copy so we do not mutate the database representation
     rule = dict(structured_rule)
     
@@ -108,12 +122,13 @@ def _wrap_xslt(body: str) -> str:
 
 # ─── Rule type builders ───────────────────────────────────────────────────────
 
-def _xslt_required_field(rule: dict) -> str:
+def _xslt_required_field(rule: dict, xpath: str = None) -> str:
     field   = rule.get("field", "")
     message = rule.get("message", f"{field} is required")
+    target_path = xpath if xpath else f"/Invoice/{field}"
     return f"""
       <xsl:choose>
-        <xsl:when test="not(/Invoice/{field}) or /Invoice/{field} = ''">
+        <xsl:when test="not({target_path}) or {target_path} = ''">
           <status>FAIL</status>
           <message>{message}</message>
           <field>{field}</field>
@@ -410,3 +425,63 @@ def _xslt_unknown(rule: dict) -> str:
         <xsl:with-param name="suggestion">{safe_sug}</xsl:with-param>
         <xsl:with-param name="field">{safe_field}</xsl:with-param>
       </xsl:call-template>"""
+
+
+def generate_direct_tag_xslt(tag: str, rule_type: str, xpath: str, **kwargs) -> str:
+    """
+    Generate XSLT for a non-canonical XML tag extracted
+    directly from user's uploaded XML file.
+    Uses the exact xpath provided — no field remapping.
+    """
+    safe_xpath = xpath or f"/Invoice/{tag}"
+
+    if rule_type in ("presence", "required_field"):
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" indent="yes"/>
+  <xsl:template match="/">
+    <validation_result>
+      <xsl:choose>
+        <xsl:when test="not({safe_xpath}) or {safe_xpath} = ''">
+          <status>FAIL</status>
+          <message>{tag} must be present</message>
+          <field>{tag}</field>
+        </xsl:when>
+        <xsl:otherwise>
+          <status>PASS</status>
+          <message>{tag} is present</message>
+          <field>{tag}</field>
+        </xsl:otherwise>
+      </xsl:choose>
+    </validation_result>
+  </xsl:template>
+</xsl:stylesheet>"""
+
+    if rule_type in ("compare", "numeric_comparison"):
+        operator = kwargs.get("operator", "gt")
+        value = kwargs.get("value", 0)
+        op_map = {"gt": ">", "lt": "<", "gte": ">=", "lte": "<=", "eq": "=", "neq": "!="}
+        xslt_op = op_map.get(operator, ">")
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" indent="yes"/>
+  <xsl:template match="/">
+    <validation_result>
+      <xsl:choose>
+        <xsl:when test="not({safe_xpath} {xslt_op} {value})">
+          <status>FAIL</status>
+          <message>{tag} must be {operator} {value}. Found <xsl:value-of select="{safe_xpath}"/></message>
+          <field>{tag}</field>
+        </xsl:when>
+        <xsl:otherwise>
+          <status>PASS</status>
+          <message>{tag} passes check</message>
+          <field>{tag}</field>
+        </xsl:otherwise>
+      </xsl:choose>
+    </validation_result>
+  </xsl:template>
+</xsl:stylesheet>"""
+
+    # fallback — presence check
+    return generate_direct_tag_xslt(tag, "presence", xpath)

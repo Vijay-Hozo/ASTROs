@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { DesktopSidebar, MobileSidebar } from "@/components/rule-engine/sidebar";
+import { DesktopSidebar, MobileSidebar } from "@/components/dashboard/sidebar";
 import Header from "@/components/validation-results/header";
 import SummaryCards from "./summary-cards";
 import ValidationTable from "./validation-table";
