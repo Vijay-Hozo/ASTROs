@@ -1,9 +1,14 @@
-import sys
+﻿import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 """
-test_fixes.py — Regression tests for Phase 1-8 fixes.
+test_fixes.py â€” Regression tests for Phase 1-8 fixes.
 Tests all critical security and stability improvements.
 """
 
@@ -28,26 +33,26 @@ def test_rule_text_validation():
     # Test short text (too short)
     try:
         _validate_rule_text("abc")
-        print("  ✗ FAIL: Should reject rule_text < 5 chars")
+        print("  âœ— FAIL: Should reject rule_text < 5 chars")
         return False
     except HTTPException:
-        print(f"  ✓ PASS: Correctly rejected short text")
+        print(f"  âœ“ PASS: Correctly rejected short text")
     
     # Test valid text
     try:
         _validate_rule_text("Tax amount must be greater than zero")
-        print(f"  ✓ PASS: Accepted valid rule_text")
+        print(f"  âœ“ PASS: Accepted valid rule_text")
     except HTTPException as e:
-        print(f"  ✗ FAIL: Should accept valid rule_text: {e}")
+        print(f"  âœ— FAIL: Should accept valid rule_text: {e}")
         return False
     
     # Test oversized text (>500 chars)
     try:
         _validate_rule_text("A" * 501)
-        print("  ✗ FAIL: Should reject rule_text > 500 chars")
+        print("  âœ— FAIL: Should reject rule_text > 500 chars")
         return False
     except HTTPException:
-        print(f"  ✓ PASS: Correctly rejected 501-char rule_text")
+        print(f"  âœ“ PASS: Correctly rejected 501-char rule_text")
     
     return True
 
@@ -67,30 +72,30 @@ def test_xml_parsing_with_defusedxml():
     
     result = parse_invoice_xml(valid_xml)
     if "_parse_error" in result:
-        print(f"  ✗ FAIL: Valid XML rejected: {result['_parse_error']}")
+        print(f"  âœ— FAIL: Valid XML rejected: {result['_parse_error']}")
         return False
     if result.get("invoice_id") == "INV-001":
-        print("  ✓ PASS: Valid XML parsed correctly")
+        print("  âœ“ PASS: Valid XML parsed correctly")
     else:
-        print(f"  ✗ FAIL: XML parsing failed: {result}")
+        print(f"  âœ— FAIL: XML parsing failed: {result}")
         return False
     
     # Test malformed XML
     malformed_xml = "<Invoice><invoice_id>INV-001</tax>"
     result = parse_invoice_xml(malformed_xml)
     if "_parse_error" in result:
-        print(f"  ✓ PASS: Malformed XML rejected safely: {result['_parse_error'][:50]}")
+        print(f"  âœ“ PASS: Malformed XML rejected safely: {result['_parse_error'][:50]}")
     else:
-        print("  ✗ FAIL: Should reject malformed XML")
+        print("  âœ— FAIL: Should reject malformed XML")
         return False
     
     # Test plaintext (not XML)
     plaintext = "Just some random text"
     result = parse_invoice_xml(plaintext)
     if "_parse_error" in result:
-        print(f"  ✓ PASS: Plaintext rejected: {result['_parse_error'][:50]}")
+        print(f"  âœ“ PASS: Plaintext rejected: {result['_parse_error'][:50]}")
     else:
-        print("  ✗ FAIL: Should reject plaintext")
+        print("  âœ— FAIL: Should reject plaintext")
         return False
     
     return True
@@ -107,9 +112,9 @@ def test_xml_size_limits():
         req = BatchEvaluateRequest(
             xml_content="<test>" + "x" * 1000 + "</test>"
         )
-        print(f"  ✓ PASS: Accepted XML with ~1KB size")
+        print(f"  âœ“ PASS: Accepted XML with ~1KB size")
     except Exception as e:
-        print(f"  ✗ FAIL: Should accept small XML: {e}")
+        print(f"  âœ— FAIL: Should accept small XML: {e}")
         return False
     
     # Test payload check at endpoint level (not schema level)
@@ -117,10 +122,10 @@ def test_xml_size_limits():
     # Pydantic's max_length counts characters, not bytes
     xml_content = "<test>" + "x" * 1000 + "</test>"
     if len(xml_content) <= MAX_XML_SIZE:
-        print(f"  ✓ PASS: Endpoint-level size check configured (max {MAX_XML_SIZE} bytes)")
+        print(f"  âœ“ PASS: Endpoint-level size check configured (max {MAX_XML_SIZE} bytes)")
         return True
     else:
-        print("  ✗ FAIL: XML size validation issue")
+        print("  âœ— FAIL: XML size validation issue")
         return False
 
 
@@ -134,14 +139,14 @@ def test_error_message_sanitization():
             rule_text="short",
             severity="invalid_severity_value"
         )
-        print("  ✗ FAIL: Should reject invalid severity")
+        print("  âœ— FAIL: Should reject invalid severity")
         return False
     except Exception as e:
         error_msg = str(e)
         if "invalid_severity_value" in error_msg:
-            print("  ✓ PASS: Validation error message includes field info")
+            print("  âœ“ PASS: Validation error message includes field info")
         else:
-            print(f"  ✓ PASS: Validation error caught: {error_msg[:50]}")
+            print(f"  âœ“ PASS: Validation error caught: {error_msg[:50]}")
     
     return True
 
@@ -160,10 +165,10 @@ def test_namespace_support():
     
     result = parse_invoice_xml(ns_xml)
     if "_parse_error" not in result and result.get("invoice_id") == "INV-NS-001":
-        print("  ✓ PASS: Namespace XML parsed correctly")
+        print("  âœ“ PASS: Namespace XML parsed correctly")
         return True
     else:
-        print(f"  ✗ FAIL: Namespace XML parsing: {result}")
+        print(f"  âœ— FAIL: Namespace XML parsing: {result}")
         return False
 
 
@@ -182,10 +187,10 @@ def test_no_catastrophic_backtracking():
     try:
         _validate_rule_text(malicious_payload)
         # This is actually OK - the LLM parser can handle it safely
-        print(f"  ✓ PASS: LLM-based parser handles suspicious patterns safely")
+        print(f"  âœ“ PASS: LLM-based parser handles suspicious patterns safely")
         return True
     except HTTPException as e:
-        print(f"  ✓ PASS: Rejected suspicious payload: {e.detail[:50]}")
+        print(f"  âœ“ PASS: Rejected suspicious payload: {e.detail[:50]}")
         return True
 
 
@@ -200,10 +205,10 @@ def test_sql_injection_prevention():
     
     try:
         _validate_rule_text(sql_injection)
-        print("  ✗ FAIL: Should reject SQL-like content")
+        print("  âœ— FAIL: Should reject SQL-like content")
         return False
     except HTTPException as e:
-        print(f"  ✓ PASS: SQL injection payload blocked")
+        print(f"  âœ“ PASS: SQL injection payload blocked")
         return True
 
 
@@ -224,10 +229,10 @@ def test_xxe_protection():
     result = parse_invoice_xml(xxe_payload)
     # defusedxml should prevent XXE by rejecting the payload or sanitizing it
     if "_parse_error" in result or "&xxe;" not in str(result):
-        print(f"  ✓ PASS: XXE payload neutralized")
+        print(f"  âœ“ PASS: XXE payload neutralized")
         return True
     else:
-        print(f"  ✗ FAIL: XXE payload may not be blocked: {result}")
+        print(f"  âœ— FAIL: XXE payload may not be blocked: {result}")
         # Note: defusedxml might accept the structure but prevents entity expansion
         return True  # Still passing because entity expansion is prevented
 
@@ -243,10 +248,10 @@ def test_field_extraction_safety():
     if (result.get("seller_name") is None and
         result.get("tax_amount") is None and
         result.get("invoice_id") == "INV-001"):
-        print("  ✓ PASS: Missing fields safely handled as None")
+        print("  âœ“ PASS: Missing fields safely handled as None")
         return True
     else:
-        print(f"  ✗ FAIL: Field extraction issue: {result}")
+        print(f"  âœ— FAIL: Field extraction issue: {result}")
         return False
 
 
@@ -260,13 +265,13 @@ def test_async_timeout_configuration():
         has_batch_timeout = hasattr(main, 'BATCH_VALIDATION_TIMEOUT')
         
         if has_parse_timeout and has_batch_timeout:
-            print(f"  ✓ PASS: Timeouts configured (parse={main.PARSE_TIMEOUT}s, batch={main.BATCH_VALIDATION_TIMEOUT}s)")
+            print(f"  âœ“ PASS: Timeouts configured (parse={main.PARSE_TIMEOUT}s, batch={main.BATCH_VALIDATION_TIMEOUT}s)")
             return True
         else:
-            print("  ✗ FAIL: Timeout configuration missing")
+            print("  âœ— FAIL: Timeout configuration missing")
             return False
     except Exception as e:
-        print(f"  ✗ FAIL: Could not verify timeout config: {e}")
+        print(f"  âœ— FAIL: Could not verify timeout config: {e}")
         return False
 
 
@@ -296,7 +301,7 @@ def run_all_tests():
             result = test_fn()
             results.append((test_fn.__name__, result))
         except Exception as e:
-            print(f"  ✗ EXCEPTION: {str(e)[:100]}")
+            print(f"  âœ— EXCEPTION: {str(e)[:100]}")
             results.append((test_fn.__name__, False))
     
     # Summary
@@ -307,19 +312,20 @@ def run_all_tests():
     total = len(results)
     
     for test_name, result in results:
-        status = "✓ PASS" if result else "✗ FAIL"
+        status = "âœ“ PASS" if result else "âœ— FAIL"
         print(f"{status}  {test_name}")
     
     print(f"\nTotal: {passed}/{total} tests passed ({round(passed/total*100)}%)")
     
     if passed == total:
-        print("\n🎉 All regression tests PASSED!")
+        print("\nðŸŽ‰ All regression tests PASSED!")
         return True
     else:
-        print(f"\n⚠️  {total - passed} tests FAILED")
+        print(f"\nâš ï¸  {total - passed} tests FAILED")
         return False
 
 
 if __name__ == "__main__":
     success = run_all_tests()
     exit(0 if success else 1)
+

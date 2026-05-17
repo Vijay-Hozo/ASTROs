@@ -7,7 +7,54 @@ def build_xslt(structured_rule: dict) -> str:
     """
     Takes a structured rule dict from LLM and returns a complete XSLT string.
     """
-    rule_type = structured_rule.get("rule_type", "unknown")
+    # Create a copy so we do not mutate the database representation
+    rule = dict(structured_rule)
+    
+    # Translate new rule types to legacy names for the builders
+    orig_type = rule.get("rule_type", "unknown")
+    
+    if orig_type == "presence":
+        rule["rule_type"] = "required_field"
+        rule["message"] = rule.get("message") or f"{rule.get('field')} is required"
+        
+    elif orig_type == "percentage":
+        rule["rule_type"] = "amount_calculation"
+        rule["operation"] = "percentage"
+        rule["base_field"] = rule.get("reference_field") or "taxable_amount"
+        rule["value"] = rule.get("rate") or rule.get("value") or 0
+        rule["message"] = rule.get("message") or f"Tax amount must be exactly {rule.get('value')}% of taxable amount"
+        
+    elif orig_type == "formula":
+        rule["rule_type"] = "amount_calculation"
+        expr = rule.get("expression", "")
+        # If it's a sum formula like "taxable_amount + tax_amount"
+        if "+" in expr:
+            parts = [p.strip() for p in expr.split("+")]
+            rule["operation"] = "sum"
+            rule["base_field"] = parts[0]
+            rule["add_field"] = parts[1] if len(parts) > 1 else ""
+        else:
+            rule["operation"] = "percentage"  # Fallback
+            
+    elif orig_type == "date_rule":
+        rule["rule_type"] = "date_validation"
+        constraint = rule.get("constraint", "")
+        if constraint == "not_future":
+            rule["operation"] = "not_future"
+        else:
+            rule["operation"] = "valid_date"
+            
+    elif orig_type == "compare":
+        rule["rule_type"] = "numeric_comparison"
+        rule["operation"] = rule.get("operator", "gt")
+        rule["value"] = rule.get("value", 0)
+        
+    elif orig_type == "equals":
+        rule["rule_type"] = "numeric_comparison"
+        rule["operation"] = "gte" # Map to equivalence
+        rule["value"] = rule.get("value", 0)
+
+    rule_type = rule.get("rule_type", "unknown")
 
     builders = {
         "required_field":             _xslt_required_field,
@@ -22,9 +69,9 @@ def build_xslt(structured_rule: dict) -> str:
 
     builder = builders.get(str(rule_type))
     if not builder:
-        return _xslt_unknown(structured_rule)
+        return _wrap_xslt(_xslt_unknown(rule))
 
-    body = builder(structured_rule)
+    body = builder(rule)
     return _wrap_xslt(body)
 
 
@@ -43,6 +90,17 @@ def _wrap_xslt(body: str) -> str:
     <validation_result>
 {body}
     </validation_result>
+  </xsl:template>
+
+  <xsl:template name="unsupported-rule">
+    <xsl:param name="message"/>
+    <xsl:param name="suggestion"/>
+    <xsl:param name="field"/>
+    <status>UNSUPPORTED</status>
+    <message><xsl:value-of select="$message"/></message>
+    <suggestion><xsl:value-of select="$suggestion"/></suggestion>
+    <field><xsl:value-of select="$field"/></field>
+    <action>SKIP</action>
   </xsl:template>
 
 </xsl:stylesheet>"""
@@ -75,8 +133,8 @@ def _xslt_amount_calculation(rule: dict) -> str:
 
     if operation == "percentage":
         base  = rule.get("base_field", "")
-        rate  = float(rule.get("value", 0))
-        mult  = rate / 100
+        mult  = float(rule.get("value", 0)) / 100
+        rate  = float(mult * 100)
         return f"""
       <xsl:variable name="actual"   select="number(/Invoice/{field})"/>
       <xsl:variable name="base_val" select="number(/Invoice/{base})"/>
@@ -324,7 +382,31 @@ def _xslt_duplicate(rule: dict) -> str:
 
 
 def _xslt_unknown(rule: dict) -> str:
-    return """
-      <status>SKIP</status>
-      <message>Rule type not recognised — skipped</message>
-      <field></field>"""
+    message = rule.get("message")
+    if not message and rule.get("warnings"):
+        non_rewrite = [w for w in rule["warnings"] if "Suggested rewrite" not in w]
+        if non_rewrite:
+            message = "; ".join(non_rewrite)
+    if not message:
+        message = "Rule type not recognised — skipped"
+
+    suggestion = rule.get("suggestion")
+    if not suggestion and rule.get("warnings"):
+        for w in rule["warnings"]:
+            if "Suggested rewrite" in w:
+                suggestion = w
+                break
+    if not suggestion:
+        suggestion = "Please rewrite the rule using supported fields."
+
+    field = rule.get("field") or ""
+    import html
+    safe_msg = html.escape(str(message))
+    safe_sug = html.escape(str(suggestion))
+    safe_field = html.escape(str(field))
+    return f"""
+      <xsl:call-template name="unsupported-rule">
+        <xsl:with-param name="message">{safe_msg}</xsl:with-param>
+        <xsl:with-param name="suggestion">{safe_sug}</xsl:with-param>
+        <xsl:with-param name="field">{safe_field}</xsl:with-param>
+      </xsl:call-template>"""

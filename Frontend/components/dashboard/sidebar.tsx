@@ -4,18 +4,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  BarChart3,
-  Database,
-  FileCheck2,
-  FileCode2,
-  FileText,
-  Home,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { FileCode2, Home, ShieldCheck, X } from "lucide-react";
 
 type SidebarProps = {
   mobileOpen: boolean;
@@ -24,9 +13,9 @@ type SidebarProps = {
 
 const navItems = [
   { label: "Dashboard", icon: Home, href: "/dashboard" },
+  { label: "Rules Library", icon: FileCode2, href: "/rules-library" },
 //   { label: "Rule Engine", icon: Sparkles, href: "/rule-engine" },
 //   { label: "Validate Invoices", icon: FileCheck2, href: "/validate-invoices" },
-  { label: "Rules Library", icon: FileCode2, href: "/rules-library" },
 //   { label: "Invoices", icon: FileText },
   { label: "Validation Results", icon: ShieldCheck, href: "/validation-results" },
 //   { label: "Dataset Generator", icon: Database },

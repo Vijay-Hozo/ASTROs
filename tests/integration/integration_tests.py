@@ -11,7 +11,13 @@ import os
 import json
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'backend'))
 
 from xml_reader import parse_invoice_xml
 from xslt_executor import execute_xslt
@@ -19,8 +25,8 @@ from xslt_templates import build_xslt
 
 
 TESTS_DIR = Path(__file__).parent
-XML_DIR = TESTS_DIR / "xml"
-EXPECTED_DIR = TESTS_DIR / "expected"
+XML_DIR = TESTS_DIR.parent / "xml"
+EXPECTED_DIR = TESTS_DIR.parent / "expected"
 
 
 def test_valid_invoice_all_rules_pass():

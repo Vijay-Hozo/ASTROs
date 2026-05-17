@@ -10,20 +10,21 @@ Layer                PASS       FAIL
 XML_PARSE            16         0         
 LLM_PARSE            10         0         
 XSLT_GEN             9          0         
-XSLT_EXEC            14         0         
+XSLT_EXEC            13         1         
+  → valid invoice rule_9 should PASS
 DB                   4          0         
 API                  4          0         
 ----------------------------------------------------------------------
-TOTAL                57         0         
+TOTAL                56         1         
 
 DETERMINISTIC CHECKS:
 ----------------------------------------------------------------------
 [PASS]: Valid invoice produces identical results on rerun
-[PASS]: All rules PASS on valid invoice consistently
+[FAIL]: All rules PASS on valid invoice consistently
 [PASS]: Invalid tax consistently fails
 
 OVERALL STATUS:
 ----------------------------------------------------------------------
-[PASS] ALL CHECKS PASSED
-Execution time: 7.08s
+[FAIL] SOME CHECKS FAILED
+Execution time: 18.59s
 ======================================================================

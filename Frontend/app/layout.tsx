@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
+import HealthCheck from "@/components/health-check";
 import "./globals.css";
 import { Plus_Jakarta_Sans } from 'next/font/google';
 
@@ -35,6 +36,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <HealthCheck />
         </ThemeProvider>
       </body>
     </html>

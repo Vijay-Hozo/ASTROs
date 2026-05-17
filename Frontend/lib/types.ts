@@ -21,19 +21,31 @@ export type RuleSeverity = "low" | "medium" | "high";
 
 export interface ParsedRule {
   rule_type: RuleType;
-  field: string;
-  operation: string;
-  value: unknown;
-  condition_field?: string;
-  condition_value?: string;
-  xslt: string;
+  field?: string | null;
+  operation?: string | null;
+  value?: unknown;
+  condition_field?: string | null;
+  condition_value?: string | null;
+  base_field?: string | null;
+  extra?: Record<string, unknown>;
+  xpath?: string;
+  python_logic?: string;
+  xslt?: string;
   _provider?: "groq" | "openrouter";
+}
+
+export interface ParseRuleResponse {
+  rule_text: string;
+  parsed_rule: ParsedRule;
+  xslt: string;
+  xpath?: string;
+  python_logic?: string;
 }
 
 export interface Rule {
   id: number;
   rule_text: string;
-  parsed_json: ParsedRule;
+  parsed_json: ParsedRule | ParseRuleResponse;
   severity: RuleSeverity;
   created_at: string;
 }
@@ -76,6 +88,7 @@ export interface UploadInvoiceResponse {
 // ============================================================================
 
 export type ValidationStatus = "PASS" | "FAIL" | "ERROR";
+export type OverallValidationStatus = "PASS" | "FAIL" | "PARTIAL";
 
 export interface ValidationResultItem {
   rule_id?: number;
@@ -111,10 +124,54 @@ export interface BatchValidationResponse {
 export interface ValidationResult {
   id: number;
   invoice_id: number;
-  rule_id: number;
+  invoice_identifier?: string;
+  rule_id: number | null;
+  rule_text?: string;
+  rule_type?: RuleType | null;
+  status: ValidationStatus;
+  message: string | null;
+  validated_at: string;
+}
+
+export interface ValidationReportRow {
+  id: number;
+  invoice_id: number;
+  invoice_identifier: string;
+  overall_status: OverallValidationStatus;
+  message: string;
+  validated_at: string;
+  total_rules: number;
+  passed_rules: number;
+  failed_rules: number;
+  error_rules: number;
+  execution_status: string;
+}
+
+export interface ValidationDetailItem {
+  rule_id: number | null;
+  rule_text: string;
+  rule_type?: RuleType | null;
   status: ValidationStatus;
   message: string;
-  created_at: string;
+  execution_result: string;
+  validated_at: string;
+}
+
+export interface ValidationReportDetail {
+  report_id: number;
+  invoice_id: number;
+  invoice_identifier: string;
+  uploaded_at: string;
+  processed_at?: string | null;
+  execution_status: string;
+  overall_status: OverallValidationStatus;
+  summary: ValidationSummary;
+  checklist: ValidationDetailItem[];
+  references: {
+    xpath: string[];
+    xslt: string[];
+    python: string[];
+  };
 }
 
 export interface InvoiceValidationResponse {
@@ -144,10 +201,12 @@ export interface DashboardStats {
   total_rules: number;
   total_invoices: number;
   total_validations: number;
-  passed_validations: number;
-  failed_validations: number;
+  passed_validations?: number;
+  failed_validations?: number;
+  total_passed?: number;
+  total_failed?: number;
   pass_rate: number;
-  recent_validations: RecentValidation[];
+  recent_validations?: RecentValidation[];
 }
 
 // ============================================================================

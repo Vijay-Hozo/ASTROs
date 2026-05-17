@@ -19,6 +19,13 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
 
+# Ensure Windows console can print unicode symbols used in reports.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # Import backend modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
@@ -335,7 +342,7 @@ def verify_xml_parsing(report: VerificationReport) -> Dict[str, Dict]:
     # Save snapshots
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     snapshot_file = SNAPSHOTS_DIR / "xml_parse_snapshots.json"
-    with open(snapshot_file, 'w') as f:
+    with open(snapshot_file, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, default=str)
     print(f"\n[SNAPSHOT] Saved XML parse results to {snapshot_file}")
     
@@ -399,7 +406,7 @@ def verify_llm_extraction(report: VerificationReport) -> Dict[int, Dict]:
     # Save LLM output snapshots
     LLM_DIR.mkdir(parents=True, exist_ok=True)
     llm_file = LLM_DIR / "llm_extraction_results.json"
-    with open(llm_file, 'w') as f:
+    with open(llm_file, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, default=str)
     print(f"\n[SNAPSHOT] Saved LLM outputs to {llm_file}")
     
@@ -443,7 +450,7 @@ def verify_xslt_generation(report: VerificationReport, llm_results: Dict) -> Dic
                 # Save individual XSLT
                 XSLT_DIR.mkdir(parents=True, exist_ok=True)
                 xslt_file = XSLT_DIR / f"rule_{rule_id:02d}.xslt"
-                with open(xslt_file, 'w') as f:
+                with open(xslt_file, 'w', encoding='utf-8') as f:
                     f.write(xslt)
             else:
                 report.add_layer_result("XSLT_GEN", False, f"rule_{rule_id} missing XSLT components")
@@ -594,7 +601,7 @@ def verify_xslt_execution(
     
     # Save execution results
     exec_file = SNAPSHOTS_DIR / "xslt_execution_results.json"
-    with open(exec_file, 'w') as f:
+    with open(exec_file, 'w', encoding='utf-8') as f:
         json.dump(exec_results, f, indent=2, default=str)
     print(f"\n[SNAPSHOT] Saved XSLT execution results to {exec_file}")
     
@@ -761,7 +768,7 @@ def main():
     
     # Save final report
     report_file = TESTS_DIR / "VERIFICATION_REPORT.txt"
-    with open(report_file, 'w') as f:
+    with open(report_file, 'w', encoding='utf-8') as f:
         f.write(final_report)
     print(f"[REPORT] Saved to {report_file}")
     

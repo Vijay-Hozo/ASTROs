@@ -8,6 +8,12 @@ import { TableLoadingSkeleton } from "../ui/loading-skeleton";
 import { ErrorAlert, EmptyState } from "../ui/error-alert";
 import type { Rule } from "@/lib/types";
 
+function getRuleType(rule: Rule): string {
+  const parsed = rule.parsed_json as any;
+  if (!parsed) return "unknown";
+  return parsed.rule_type || parsed.parsed_rule?.rule_type || "unknown";
+}
+
 export default function RulesTable({ 
   onSelect,
   onDelete,
@@ -37,7 +43,7 @@ export default function RulesTable({
     return rules.filter((r) =>
       r.rule_text.toLowerCase().includes(q) ||
       r.id.toString().includes(q) ||
-      r.parsed_json.rule_type.toLowerCase().includes(q)
+      getRuleType(r).toLowerCase().includes(q)
     );
   }, [rules, query]);
 
@@ -66,11 +72,7 @@ export default function RulesTable({
       <div className="rounded-2xl bg-white p-4 shadow-sm overflow-hidden">
         <EmptyState
           title="No rules yet"
-          description="Create your first rule to get started."
-          action={{
-            label: "Create Rule",
-            onClick: () => {}, // Parent should handle this
-          }}
+          description="Create rules on the dashboard to see them here."
         />
       </div>
     );
@@ -109,7 +111,7 @@ export default function RulesTable({
                 <td className="py-3 max-w-xs truncate">{r.rule_text}</td>
                 <td className="py-3">
                   <span className="inline-block bg-slate-100 px-2 py-1 rounded text-xs">
-                    {r.parsed_json.rule_type}
+                    {getRuleType(r)}
                   </span>
                 </td>
                 <td className="py-3">

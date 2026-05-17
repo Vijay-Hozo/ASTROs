@@ -5,11 +5,41 @@ import { motion } from "framer-motion";
 import type { Rule } from "@/lib/types";
 
 export default function RuleDetailDrawer({ rule, onClose }: { rule?: Rule | null; onClose?: () => void }) {
+  React.useEffect(() => {
+    if (!rule) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose?.();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "unset";
+    };
+  }, [rule, onClose]);
+
   if (!rule) return null;
 
   return (
-    <motion.aside initial={{ x: 300 }} animate={{ x: 0 }} exit={{ x: 300 }} className="fixed right-0 top-0 z-50 h-full w-[480px] bg-white p-6 shadow-xl">
-      <div className="flex items-start justify-between">
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm cursor-pointer"
+      />
+      <motion.aside
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", damping: 25, stiffness: 220 }}
+        className="fixed right-0 top-0 z-50 h-full w-[480px] bg-white p-6 shadow-2xl border-l border-slate-100 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
         <div>
           <h3 className="text-lg font-semibold">Rule #{rule.id}</h3>
           <p className="text-sm text-slate-500">{rule.severity.toUpperCase()} severity</p>
@@ -36,6 +66,7 @@ export default function RuleDetailDrawer({ rule, onClose }: { rule?: Rule | null
           </div>
         </div>
       </div>
-    </motion.aside>
+      </motion.aside>
+    </>
   );
 }

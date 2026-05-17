@@ -1,10 +1,12 @@
 /**
  * Production API Client
- * Centralized API layer with fetch wrapper, error handling, and typed methods
+ * Centralized API layer with fetch wrapper, error handling, retry logic, and typed methods
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 const REQUEST_TIMEOUT = 30000; // 30 seconds
+const MAX_RETRIES = 2; // Retry failed requests up to 2 times
+const RETRY_DELAY = 1000; // Start with 1 second delay, exponential backoff
 
 // ============================================================================
 // Types
@@ -54,9 +56,24 @@ function normalizeError(error: unknown): APIError {
   }
 
   if (error instanceof TypeError) {
+    // Network error or CORS issue
+    const message = `Network error: Unable to reach ${API_BASE}. Check that:
+• The backend server is running
+• The API URL is correct: ${API_BASE}
+• Your internet connection is working`;
+    
     return {
       code: 'NETWORK_ERROR',
-      message: 'Network error occurred. Check your connection or API URL.',
+      message,
+      status: 0,
+    };
+  }
+
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    // Request timeout
+    return {
+      code: 'TIMEOUT_ERROR',
+      message: `Request timed out after ${REQUEST_TIMEOUT}ms. The server may be slow or unreachable.`,
       status: 0,
     };
   }
@@ -92,6 +109,35 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
     return response;
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Execute a request with automatic retry on network/timeout errors
+ * Does NOT retry on HTTP errors (4xx, 5xx) to avoid waste
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  retryCount = 0
+): Promise<Response> {
+  try {
+    return await fetchWithTimeout(url, options);
+  } catch (error) {
+    // Network error or timeout
+    const isNetworkError = error instanceof TypeError;
+    const isAbortError = error instanceof DOMException && error.name === 'AbortError';
+    const isRetryable = isNetworkError || isAbortError;
+
+    // Retry on network/timeout errors, but not after max retries
+    if (isRetryable && retryCount < MAX_RETRIES) {
+      const delayMs = RETRY_DELAY * Math.pow(2, retryCount); // Exponential backoff
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return fetchWithRetry(url, options, retryCount + 1);
+    }
+
+    // Give up and throw
+    throw error;
   }
 }
 
@@ -168,7 +214,7 @@ export const apiClient = {
     logRequest('GET', url);
 
     try {
-      const response = await fetchWithTimeout(url, {
+      const response = await fetchWithRetry(url, {
         method: 'GET',
       });
 
@@ -190,7 +236,7 @@ export const apiClient = {
     logRequest('POST', url, body);
 
     try {
-      const response = await fetchWithTimeout(url, {
+      const response = await fetchWithRetry(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -211,12 +257,38 @@ export const apiClient = {
   /**
    * DELETE request
    */
+  async put<T = unknown>(endpoint: string, body: unknown): Promise<T> {
+    const url = `${API_BASE}${endpoint}`;
+    logRequest('PUT', url, body);
+
+    try {
+      const response = await fetchWithRetry(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await parseResponse<T>(response);
+      logResponse('PUT', url, response.status, data);
+      return data;
+    } catch (error) {
+      const apiError = normalizeError(error);
+      logError('PUT', url, apiError);
+      throw apiError;
+    }
+  },
+
+  /**
+   * DELETE request
+   */
   async delete<T = unknown>(endpoint: string): Promise<T | null> {
     const url = `${API_BASE}${endpoint}`;
     logRequest('DELETE', url);
 
     try {
-      const response = await fetchWithTimeout(url, {
+      const response = await fetchWithRetry(url, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

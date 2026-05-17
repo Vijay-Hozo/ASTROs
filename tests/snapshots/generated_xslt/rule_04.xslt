@@ -20,7 +20,7 @@
       <xsl:choose>
         <xsl:when test="$absdiff > 0.02">
           <status>FAIL</status>
-          <message>Tax amount mismatch. Expected <xsl:value-of select="$expected"/>, found <xsl:value-of select="$actual"/></message>
+          <message>Amount mismatch. Expected <xsl:value-of select="$expected"/>, found <xsl:value-of select="$actual"/></message>
           <field>tax_amount</field>
         </xsl:when>
         <xsl:otherwise>

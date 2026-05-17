@@ -2,9 +2,8 @@
 
 import React from "react";
 import { CheckCircle, XCircle, Clock, BarChart3 } from "lucide-react";
-import { useApiData } from "@/lib/hooks";
 import { StatsCardLoadingSkeleton } from "../ui/loading-skeleton";
-import type { ValidationResult } from "@/lib/types";
+import type { ValidationReportRow } from "@/lib/types";
 
 function Card({
   icon,
@@ -26,16 +25,21 @@ function Card({
   );
 }
 
-export default function SummaryCards() {
-  const { data: results, isLoading } = useApiData<ValidationResult[]>("/results");
+export default function SummaryCards({
+  results,
+  isLoading,
+}: {
+  results: ValidationReportRow[];
+  isLoading?: boolean;
+}) {
   const resultsList = results || [];
 
   if (isLoading) return <StatsCardLoadingSkeleton />;
 
   const total = resultsList.length;
-  const passed = resultsList.filter((r) => r.status === "PASS").length;
-  const failed = resultsList.filter((r) => r.status === "FAIL").length;
-  const errors = resultsList.filter((r) => r.status === "ERROR").length;
+  const passed = resultsList.filter((r) => r.overall_status === "PASS").length;
+  const failed = resultsList.filter((r) => r.overall_status === "FAIL").length;
+  const partial = resultsList.filter((r) => r.overall_status === "PARTIAL").length;
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -56,8 +60,8 @@ export default function SummaryCards() {
       />
       <Card
         icon={<Clock className="h-5 w-5 text-amber-500" />}
-        label="Errors"
-        value={errors}
+        label="Partial"
+        value={partial}
       />
     </div>
   );

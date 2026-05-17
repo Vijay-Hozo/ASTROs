@@ -6,6 +6,11 @@ import { useApiData } from "@/lib/hooks";
 import { StatsCardLoadingSkeleton } from "../ui/loading-skeleton";
 import type { Rule } from "@/lib/types";
 
+function getRuleType(rule: Rule): string {
+  const parsed = rule.parsed_json as { rule_type?: string; parsed_rule?: { rule_type?: string } };
+  return parsed.rule_type || parsed.parsed_rule?.rule_type || "unknown";
+}
+
 function Card({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) {
   return (
     <div className="rounded-2xl bg-white p-4 shadow-md hover:shadow-lg transition">
@@ -29,7 +34,7 @@ export default function StatsCards() {
   const active = rules?.filter((r) => r.severity === "high").length || 0;
   const critical = rules?.filter((r) => r.severity === "high").length || 0;
   const categories = rules
-    ? new Set(rules.map((r) => r.parsed_json.rule_type)).size
+    ? new Set(rules.map((r) => getRuleType(r))).size
     : 0;
 
   return (

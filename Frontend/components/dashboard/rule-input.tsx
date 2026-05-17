@@ -3,47 +3,44 @@
 import { motion } from "framer-motion";
 import { Lightbulb, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { useMutate } from "@/lib/hooks";
+import { apiClient } from "@/lib/api-client";
 import { ErrorAlert } from "../ui/error-alert";
-import type { SingleValidationResponse, ValidateRequest } from "@/lib/types";
+import type { APIError } from "@/lib/api-client";
+import type { ParseRuleResponse } from "@/lib/types";
 
 interface RuleInputProps {
-  onValidationResult?: (result: SingleValidationResponse) => void;
-  onXmlRequired?: () => void;
-  xmlContent?: string;
+  onRuleParsed?: (rule: string, result: ParseRuleResponse) => void;
 }
 
-export default function RuleInput({ onValidationResult, onXmlRequired, xmlContent }: RuleInputProps) {
+export default function RuleInput({ onRuleParsed }: RuleInputProps) {
   const [rule, setRule] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<APIError | null>(null);
 
-  const { mutate: validateRule, isLoading: isValidating, error } = useMutate<SingleValidationResponse>(
-    "/validate",
-    {
-      onSuccess: (result) => {
-        onValidationResult?.(result);
-      },
-    }
-  );
-
-  const handleValidate = async () => {
+  const handleParseRule = async () => {
     if (!rule.trim()) {
-      alert("Please enter a rule");
+      setError({
+        code: "VALIDATION_ERROR",
+        message: "Please enter a rule before parsing",
+        status: 400,
+      });
       return;
     }
 
-    if (!xmlContent?.trim()) {
-      onXmlRequired?.();
-      alert("Please provide XML content to test against. Use the XML Preview panel on the right.");
-      return;
-    }
+    setIsLoading(true);
+    setError(null);
 
     try {
-      await validateRule({
+      const result = await apiClient.post<ParseRuleResponse>("/parse-rule", {
         rule_text: rule,
-        xml_content: xmlContent,
-      } as ValidateRequest);
+      });
+      onRuleParsed?.(rule, result);
     } catch (err) {
-      console.error("Validation failed:", err);
+      const apiError = err as APIError;
+      setError(apiError);
+      console.error("Parse rule failed:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -62,7 +59,7 @@ export default function RuleInput({ onValidationResult, onXmlRequired, xmlConten
       <textarea
         value={rule}
         onChange={(e) => setRule(e.target.value)}
-        disabled={isValidating}
+        disabled={isLoading}
         className="h-28 w-full resize-none rounded-xl border border-slate-300 p-4 text-slate-900 bg-white transition focus:outline-none focus:ring-4 focus:ring-indigo-100 md:h-32 disabled:bg-slate-50 disabled:opacity-50"
         placeholder="Example: If tax category is exempt, tax exemption reason is required."
         maxLength={500}
@@ -74,20 +71,22 @@ export default function RuleInput({ onValidationResult, onXmlRequired, xmlConten
         </p>
       </div>
 
+      {error && <ErrorAlert error={error} />}
+
       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="inline-flex items-center gap-2 text-xs text-slate-500">
           <Lightbulb className="h-3.5 w-3.5 text-amber-500" />
           Tip: Use simple English. Example: Buyer name is required
         </p>
         <motion.button
-          whileHover={{ y: isValidating ? 0 : -1 }}
-          whileTap={{ scale: isValidating ? 1 : 0.98 }}
-          onClick={handleValidate}
-          disabled={isValidating || !rule.trim()}
+          whileHover={{ y: isLoading ? 0 : -1 }}
+          whileTap={{ scale: isLoading ? 1 : 0.98 }}
+          onClick={handleParseRule}
+          disabled={isLoading || !rule.trim()}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#3749ff] to-[#4c2ff1] px-5 py-2.5 text-sm font-medium text-white shadow-[0_8px_24px_rgba(67,46,241,0.35)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Sparkles className="h-4 w-4" />
-          {isValidating ? "Validating..." : "Parse Rule"}
+          {isLoading ? "Parsing..." : "Parse Rule"}
         </motion.button>
       </div>
     </motion.section>

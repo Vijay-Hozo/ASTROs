@@ -23,7 +23,7 @@
       <xsl:choose>
         <xsl:when test="$is_future">
           <status>FAIL</status>
-          <message>Issue date cannot be in the future. 'issue_date' is in the future</message>
+          <message>Date validation failed. 'issue_date' is in the future</message>
           <field>issue_date</field>
         </xsl:when>
         <xsl:otherwise>

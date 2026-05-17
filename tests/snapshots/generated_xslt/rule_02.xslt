@@ -13,7 +13,7 @@
       <xsl:choose>
         <xsl:when test="not(/Invoice/buyer_name) or /Invoice/buyer_name = ''">
           <status>FAIL</status>
-          <message>Buyer name is missing</message>
+          <message>buyer_name is required</message>
           <field>buyer_name</field>
         </xsl:when>
         <xsl:otherwise>

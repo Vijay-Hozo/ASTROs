@@ -120,9 +120,22 @@ class ParsedRule(BaseModel):
     """The structured JSON produced by the rule parser."""
     rule_type: str
     field: Optional[str] = None
+    operator: Optional[str] = None
+    value: Optional[Any] = None
+    min: Optional[float] = None
+    max: Optional[float] = None
+    constraint: Optional[str] = None
+    reference_field: Optional[str] = None
+    expression: Optional[str] = None
+    rate: Optional[float] = None
+    tolerance: Optional[float] = 0.01
+    description: Optional[str] = None
+    confidence: Optional[float] = 1.0
+    warnings: Optional[List[str]] = Field(default_factory=list)
+    
+    # Backward compatibility fields
     operation: Optional[str] = None
     base_field: Optional[str] = None
-    value: Optional[Any] = None
     condition_field: Optional[str] = None
     condition_value: Optional[str] = None
     extra: Optional[dict] = None
@@ -236,3 +249,57 @@ class DeleteResponse(BaseModel):
     """Generic delete confirmation."""
     message: str
     id: int
+
+
+class UpdateRuleRequest(BaseModel):
+    """Request to update rule text or severity."""
+    rule_text: Optional[str] = None
+    severity: Optional[str] = None
+
+
+class UpdateValidationLogicRequest(BaseModel):
+    """Request to update rule's generated validation logic directly."""
+    xpath_logic: Optional[str] = None
+    xslt_logic: Optional[str] = None
+    python_logic: Optional[str] = None
+
+
+class ParseRuleRequest(BaseModel):
+    """Parse a natural language rule without saving it."""
+    rule_text: str = Field(..., min_length=5, max_length=500, description="Natural language rule in plain English (max 500 chars)")
+
+    @field_validator("rule_text")
+    @classmethod
+    def rule_text_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("rule_text cannot be blank")
+        return v.strip()
+
+
+class ParseRuleResponse(BaseModel):
+    """Response from parsing a rule."""
+    rule_text: str
+    parsed_rule: ParsedRule
+    xslt: str = Field(..., description="Generated XSLT validation logic")
+    xpath: Optional[str] = None
+    python_logic: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "rule_text": "Tax amount must be greater than 0",
+                "parsed_rule": {
+                    "rule_type": "numeric_comparison",
+                    "field": "tax_amount",
+                    "operation": "greater_than",
+                    "value": 0,
+                    "condition_field": None,
+                    "condition_value": None,
+                    "extra": None
+                },
+                "xslt": "<xsl:if test='//tax_amount &lt;= 0'>...</xsl:if>",
+                "xpath": "//tax_amount > 0",
+                "python_logic": "if tax_amount <= 0: raise ValidationError('Tax amount must be greater than 0')"
+            }
+        }
+    }

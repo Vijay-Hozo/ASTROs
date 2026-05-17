@@ -10,17 +10,16 @@
   <xsl:template match="/">
     <validation_result>
 
-      <xsl:variable name="inv_currency" select="/Invoice/currency_code"/>
       <xsl:choose>
-        <xsl:when test="/Invoice/line_items/item[currency != $inv_currency]">
+        <xsl:when test="not(/Invoice/currency_code = 'USD')">
           <status>FAIL</status>
-          <message>Line item currency does not match invoice currency</message>
-          <field>line_item_currency</field>
+          <message>Currency '<xsl:value-of select="/Invoice/currency_code"/>' not in allowed list: ['USD']</message>
+          <field>currency_code</field>
         </xsl:when>
         <xsl:otherwise>
           <status>PASS</status>
-          <message>All line item currencies match invoice currency</message>
-          <field>line_item_currency</field>
+          <message>Currency is valid</message>
+          <field>currency_code</field>
         </xsl:otherwise>
       </xsl:choose>
     </validation_result>

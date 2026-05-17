@@ -10,13 +10,13 @@ import FailedRulesList from "./failed-rules-list";
 import EmptyState from "./empty-state";
 import { useApiData } from "@/lib/hooks";
 import { ErrorAlert } from "../ui/error-alert";
-import type { ValidationResult } from "@/lib/types";
+import type { ValidationReportRow } from "@/lib/types";
 
 export default function ValidationResultsClient() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [selected, setSelected] = useState<ValidationResult | null>(null);
+  const [selected, setSelected] = useState<ValidationReportRow | null>(null);
 
-  const { data: results, isLoading, error, refetch } = useApiData<ValidationResult[]>("/results");
+  const { data: results, isLoading, error, refetch } = useApiData<ValidationReportRow[]>("/results");
   const resultsList = results || [];
 
   const hasResults = resultsList.length > 0;
@@ -31,17 +31,23 @@ export default function ValidationResultsClient() {
 
         <main className="p-4 md:p-6">
           <div className="mx-auto max-w-[1200px] space-y-6">
-            <SummaryCards />
+            <SummaryCards results={resultsList} isLoading={isLoading} />
 
             {error && <ErrorAlert error={error} onRetry={refetch} />}
 
             {hasResults ? (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-2">
-                  <ValidationTable onView={(r) => setSelected(r)} isLoading={isLoading} />
+                  <ValidationTable
+                    onView={(r) => setSelected(r)}
+                    isLoading={isLoading}
+                    results={resultsList}
+                    error={error}
+                    refetch={refetch}
+                  />
                 </div>
                 <div className="lg:col-span-1 space-y-4">
-                  <FailedRulesList />
+                  <FailedRulesList results={resultsList} />
                 </div>
               </div>
             ) : isLoading ? (
