@@ -61,7 +61,7 @@ CANONICAL_FIELDS = {
     "purchase_order",
 }
 
-RuleParser = Callable[[str], dict[str, Any] | None]
+RuleParser = Callable[[str, int], dict[str, Any] | None]
 
 
 @dataclass
@@ -698,8 +698,8 @@ def _make_rule_template(rule: dict[str, Any], index: int) -> str:
             "==": "=",
             "!=": "!=",
         }
-        op_text = {">": "greater than", "<": "less than", ">=": "greater than or equal to", "<=": "less than or equal to", "==": "equal to", "!=": "not equal to"}.get(operator, "compare against")
-        actual_operator = op_map.get(operator, ">")
+        op_text = {">": "greater than", "<": "less than", ">=": "greater than or equal to", "<=": "less than or equal to", "==": "equal to", "!=": "not equal to"}.get(operator or ">", "compare against")
+        actual_operator = op_map.get(operator or ">", ">")
         value = rule.get("value")
         return f"""
   <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"numeric_comparison\" field=\"{_xslt_safe(field)}\">\n      <xsl:variable name=\"actual\" select=\"number({field_xpath})\"/>\n      <xsl:choose>\n        <xsl:when test=\"not($actual {actual_operator} {value})\">\n          <status>FAIL</status>\n          <message>{title} must be {op_text} {value}</message>\n        </xsl:when>\n        <xsl:otherwise>\n          <status>PASS</status>\n          <message>{title} passes numeric comparison</message>\n        </xsl:otherwise>\n      </xsl:choose>\n    </rule_result>\n  </xsl:template>"""
@@ -720,11 +720,11 @@ def _make_rule_template(rule: dict[str, Any], index: int) -> str:
             rate = rule.get("rate")
             return f"""
   <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"amount_calculation\" field=\"{_xslt_safe(field)}\">\n      <xsl:variable name=\"actual\" select=\"number({field_xpath})\"/>\n      <xsl:variable name=\"expected\" select=\"number(/Invoice/{rule.get('reference_field')}) * {rate} div 100\"/>\n      <xsl:variable name=\"diff\" select=\"$actual - $expected\"/>\n      <xsl:choose>\n        <xsl:when test=\"not($diff &lt;= $tolerance and $diff &gt;= (0 - $tolerance))\">\n          <status>FAIL</status>\n          <message>{title} must equal {rate}% of {rule.get('reference_field')}</message>\n        </xsl:when>\n        <xsl:otherwise>\n          <status>PASS</status>\n          <message>{title} matches calculated amount</message>\n        </xsl:otherwise>\n      </xsl:choose>\n    </rule_result>\n  </xsl:template>"""
-        if rule.get("expression") and "+" in rule.get("expression"):
+        if rule.get("expression") and isinstance(rule.get("expression"), str) and "+" in rule.get("expression", ""):
             left, right = [part.strip() for part in rule.get("expression", "").split("+", 1)]
             return f"""
   <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"amount_calculation\" field=\"{_xslt_safe(field)}\">\n      <xsl:variable name=\"actual\" select=\"number({field_xpath})\"/>\n      <xsl:variable name=\"expected\" select=\"number(/Invoice/{left}) + number(/Invoice/{right})\"/>\n      <xsl:choose>\n        <xsl:when test=\"not($actual = $expected)\">\n          <status>FAIL</status>\n          <message>{title} must equal {left} + {right}</message>\n        </xsl:when>\n        <xsl:otherwise>\n          <status>PASS</status>\n          <message>{title} matches calculated amount</message>\n        </xsl:otherwise>\n      </xsl:choose>\n    </rule_result>\n  </xsl:template>"""
-        if rule.get("expression") and "*" in rule.get("expression"):
+        if rule.get("expression") and isinstance(rule.get("expression"), str) and "*" in rule.get("expression", ""):
             left, right = [part.strip() for part in rule.get("expression", "").split("*", 1)]
             return f"""
   <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"amount_calculation\" field=\"{_xslt_safe(field)}\">\n      <xsl:variable name=\"actual\" select=\"number({field_xpath})\"/>\n      <xsl:variable name=\"expected\" select=\"number(/Invoice/{left}) * number(/Invoice/{right})\"/>\n      <xsl:choose>\n        <xsl:when test=\"not($actual = $expected)\">\n          <status>FAIL</status>\n          <message>{title} must equal {left} * {right}</message>\n        </xsl:when>\n        <xsl:otherwise>\n          <status>PASS</status>\n          <message>{title} matches calculated amount</message>\n        </xsl:otherwise>\n      </xsl:choose>\n    </rule_result>\n  </xsl:template>"""
