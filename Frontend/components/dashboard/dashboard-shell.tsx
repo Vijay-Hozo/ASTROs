@@ -726,24 +726,6 @@ export default function DashboardShell() {
                 </div>
               </div>
             </div>
-            
-            {/* Stats Section */}
-            {statsError && <ErrorAlert error={statsError} onRetry={refetchStats} />}
-
-            {statsLoading ? (
-              <StatsCardLoadingSkeleton />
-            ) : (
-              <motion.section
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
-              >
-                {stats.map((item) => (
-                  <StatsCard key={item.title} {...item} />
-                ))}
-              </motion.section>
-            )}
-
             {/* Step 2 and Step 3 Cards Row */}
             <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
 
@@ -863,9 +845,29 @@ export default function DashboardShell() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm min-h-[500px]"
               >
-                <div className="mb-4">
-                  <h3 className="text-lg font-bold tracking-tight text-slate-900">Step 2: Write Rule in Natural Language</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Author standard compliance validation templates in plain English.</p>
+                <div className="mb-4 flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold tracking-tight text-slate-900">Step 2: Write Rule in Natural Language</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Author standard compliance validation templates in plain English.</p>
+                  </div>
+                  {parsedRule && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={handleEditRule}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100 transition shadow-sm"
+                        title="Edit Rule"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={handleClearRule}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-100 transition shadow-sm"
+                        title="Clear Rule"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {parseError && (
