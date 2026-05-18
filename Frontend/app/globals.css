@@ -61,6 +61,6 @@
 @layer base {
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-plus-jakarta, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial);
+    font-family: var(--font-plus-jakarta);
   }
 }

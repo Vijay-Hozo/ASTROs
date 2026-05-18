@@ -44,20 +44,32 @@ export default function XsltSelector({ value, onChange }: XsltSelectorProps) {
     };
   }, []);
 
-  const handleCreateNew = async (draft: XsltFileDraft) => {
+  const handleCreateNew = async (name: string, description: string) => {
     setIsCreating(true);
     setError(null);
 
     try {
+      const draft = { name, description, content: "" };
       const created = await createXsltFile(draft);
       setFiles((current) => [created, ...current]);
-      onChange({ mode: "create", draft, file: created });
+      onChange({ mode: "existing", file: created });
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Failed to create XSLT file");
     } finally {
       setIsCreating(false);
     }
   };
+
+  const [createName, setCreateName] = useState("invoice-rules");
+  const [createDesc, setCreateDesc] = useState("");
+
+  // Reset form when entering create mode
+  useEffect(() => {
+    if (value.mode === "create") {
+      setCreateName(value.draft?.name ?? "invoice-rules");
+      setCreateDesc(value.draft?.description ?? "");
+    }
+  }, [value.mode, value.draft]);
 
   return (
     <motion.div
@@ -98,104 +110,77 @@ export default function XsltSelector({ value, onChange }: XsltSelectorProps) {
 
       {error && <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => onChange({ mode: "create", draft: { name: "invoice-rules", description: "", content: "" } })}
-          className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition ${value.mode === "create" ? "border-indigo-300 bg-indigo-50" : "border-slate-200 bg-white hover:border-slate-300"}`}
-        >
-          <div>
-            <p className="text-sm font-medium text-slate-900">+ Create New XSLT File</p>
-            <p className="text-xs text-slate-500">Create a clean file and attach future rules to it.</p>
+      <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+        {value.mode === "create" ? (
+          <div className="flex w-full flex-col gap-3 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3 shadow-sm transition-all">
+            <div className="flex items-center gap-2">
+              <Plus className="h-4 w-4 text-indigo-600" />
+              <p className="text-sm font-semibold text-indigo-900">Create New XSLT File</p>
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <input
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder="File name"
+                className="w-full rounded-lg border border-indigo-100 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-indigo-300"
+              />
+              <input
+                value={createDesc}
+                onChange={(e) => setCreateDesc(e.target.value)}
+                placeholder="Optional description"
+                className="w-full rounded-lg border border-indigo-100 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-indigo-300"
+              />
+            </div>
+            
+            <div className="flex items-center justify-end gap-2 mt-1">
+              <button
+                type="button"
+                onClick={() => onChange({ mode: "existing", file: files[0] || null })}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-200/50 hover:text-slate-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!createName.trim() || isCreating}
+                onClick={() => handleCreateNew(createName.trim(), createDesc.trim())}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {isCreating ? "Creating..." : "Create"}
+              </button>
+            </div>
           </div>
-          {value.mode === "create" && <Check className="h-4 w-4 text-indigo-600" />}
-        </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onChange({ mode: "create", draft: { name: "invoice-rules", description: "", content: "" } })}
+            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            <div>
+              <p className="text-sm font-medium text-slate-900">+ Create New XSLT File</p>
+              <p className="text-xs text-slate-500">Create a clean file and attach future rules to it.</p>
+            </div>
+          </button>
+        )}
 
         {filteredFiles.map((file) => (
           <button
             key={file.id}
             type="button"
             onClick={() => onChange({ mode: "existing", file })}
-            className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition ${value.file?.id === file.id ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white hover:border-slate-300"}`}
+            className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition ${value.file?.id === file.id && value.mode === "existing" ? "border-emerald-300 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}
           >
             <div>
               <p className="text-sm font-medium text-slate-900">{file.name}</p>
               <p className="text-xs text-slate-500">{file.rule_count} rule{file.rule_count === 1 ? "" : "s"} · updated {new Date(file.updated_at).toLocaleDateString()}</p>
             </div>
-            {value.file?.id === file.id && <Check className="h-4 w-4 text-emerald-600" />}
+            {value.file?.id === file.id && value.mode === "existing" && <Check className="h-4 w-4 text-emerald-600" />}
           </button>
         ))}
       </div>
 
-      {value.mode === "create" && (
-        <CreateXsltForm
-          onCreate={handleCreateNew}
-          isCreating={isCreating}
-          initialName={value.draft?.name ?? "invoice-rules"}
-          initialDescription={value.draft?.description ?? ""}
-        />
-      )}
-
       {isLoading && <p className="mt-3 text-xs text-slate-500">Loading existing files...</p>}
     </motion.div>
-  );
-}
-
-function CreateXsltForm({
-  onCreate,
-  isCreating,
-  initialName,
-  initialDescription,
-}: {
-  onCreate: (draft: XsltFileDraft) => void;
-  isCreating: boolean;
-  initialName: string;
-  initialDescription: string;
-}) {
-  const [name, setName] = useState(initialName);
-  const [description, setDescription] = useState(initialDescription);
-
-  useEffect(() => {
-    setName(initialName);
-  }, [initialName]);
-
-  useEffect(() => {
-    setDescription(initialDescription);
-  }, [initialDescription]);
-
-  return (
-    <div className="mt-4 rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-indigo-900">
-        <Plus className="h-4 w-4" />
-        Create New XSLT File
-      </div>
-      <div className="space-y-3">
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="XSLT file name"
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-300"
-        />
-        <textarea
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          placeholder="Optional description"
-          className="min-h-20 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-300"
-        />
-        <button
-          type="button"
-          disabled={!name.trim() || isCreating}
-          onClick={() =>
-            onCreate({
-              name: name.trim(),
-              description: description.trim(),
-            })
-          }
-          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isCreating ? "Creating..." : "Create XSLT File"}
-        </button>
-      </div>
-    </div>
   );
 }

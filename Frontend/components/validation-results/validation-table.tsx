@@ -50,7 +50,8 @@ export default function ValidationTable({
         r.invoice_id.toString().includes(q) ||
         (r.invoice_identifier || "").toLowerCase().includes(q) ||
         r.id.toString().includes(q) ||
-        r.overall_status.toLowerCase().includes(q)
+        r.overall_status.toLowerCase().includes(q) ||
+        (r.xslt_filename || "").toLowerCase().includes(q)
     );
   }, [resultsList, query]);
 
@@ -115,49 +116,50 @@ export default function ValidationTable({
             <tr className="text-left text-xs text-slate-500">
               <th className="pb-2">Result ID</th>
               <th className="pb-2">Invoice ID</th>
+              <th className="pb-2">Rule File</th>
               <th className="pb-2">Overall Status</th>
-              <th className="pb-2">Message</th>
-              <th className="pb-2">Date</th>
               <th className="pb-2">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
-              <motion.tr key={r.id} className="border-t hover:bg-slate-50">
-                <td className="py-3 text-xs">{r.id}</td>
-                <td className="py-3 text-xs">{r.invoice_identifier || "UNKNOWN"}</td>
-                <td className="py-3">
-                  <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(r.overall_status)}`}>
-                    {r.overall_status}
-                  </span>
-                </td>
-                <td className="py-3 text-xs max-w-xs truncate">{r.message}</td>
-                <td className="py-3 text-xs">
-                  {formatTimestamp(r.validated_at)}
-                </td>
-                <td className="py-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onView?.(r)}
-                      className="rounded-md bg-slate-50 px-2 py-1 text-xs hover:bg-slate-100"
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        <Eye className="h-3.5 w-3.5" />
-                        View Details
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(r)}
-                      disabled={isDeleting}
-                      className="rounded-md px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                      aria-label={`Delete report for ${r.invoice_identifier}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-              </motion.tr>
-            ))}
+            {filtered.map((r) => {
+              const ruleFileDisplay = r.xslt_filename?.toLowerCase().includes("india")
+                ? "Indian_rule"
+                : r.xslt_filename || "N/A";
+              return (
+                <motion.tr key={r.id} className="border-t hover:bg-slate-50">
+                  <td className="py-3 text-xs">{r.id}</td>
+                  <td className="py-3 text-xs">{r.invoice_identifier || "UNKNOWN"}</td>
+                  <td className="py-3 text-xs font-medium text-slate-700">{ruleFileDisplay}</td>
+                  <td className="py-3">
+                    <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(r.overall_status)}`}>
+                      {r.overall_status}
+                    </span>
+                  </td>
+                  <td className="py-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onView?.(r)}
+                        className="rounded-md bg-slate-50 px-2 py-1 text-xs hover:bg-slate-100"
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          <Eye className="h-3.5 w-3.5" />
+                          View Details
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(r)}
+                        disabled={isDeleting}
+                        className="rounded-md px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                        aria-label={`Delete report for ${r.invoice_identifier}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </motion.tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
