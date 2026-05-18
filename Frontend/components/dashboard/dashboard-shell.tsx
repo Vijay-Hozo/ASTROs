@@ -32,7 +32,7 @@ import { useApiData } from "@/lib/hooks";
 import { apiClient } from "@/lib/api-client";
 import { ErrorAlert } from "../ui/error-alert";
 import { StatsCardLoadingSkeleton } from "../ui/loading-skeleton";
-import type { DashboardStats, ParseRuleResponse, XsltSelection } from "@/lib/types";
+import type { ActiveWorkspaceSession, DashboardStats, ParseRuleResponse, XsltSelection, XsltStorageFile } from "@/lib/types";
 import SetupModal, { hasSetupCompleted } from "./setup-modal";
 import { appendRulesToXSLTFile } from "@/lib/xslt-manager";
 import { useXsltWorkspace } from "@/lib/xslt-workspace-context";
@@ -42,17 +42,10 @@ export default function DashboardShell() {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [currentSampleFilename, setCurrentSampleFilename] = useState<string | null>(null);
   const [currentXsltFilename, setCurrentXsltFilename] = useState<string | null>(null);
-  const [currentSampleId, setCurrentSampleId] = useState<string | null>(null);
+  const [currentSampleId, setCurrentSampleId] = useState<number | null>(null);
   const [setupModalMode, setSetupModalMode] = useState<'initial' | 'reupload' | 'rechoose'>('initial');
   const [setupModalInitialXsltSelection, setSetupModalInitialXsltSelection] = useState<XsltSelection | null>(null);
-  const [activeSession, setActiveSession] = useState<{
-    sample_id: string | null;
-    sample_filename: string | null;
-    xslt_id: string | null;
-    xslt_filename: string | null;
-    extracted_tags: string[];
-    status?: string;
-  }>({
+  const [activeSession, setActiveSession] = useState<ActiveWorkspaceSession>({
     sample_id: null,
     sample_filename: null,
     xslt_id: null,
@@ -129,7 +122,7 @@ export default function DashboardShell() {
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const data = await apiClient.get("/api/workspace/active");
+        const data = await apiClient.get<ActiveWorkspaceSession>("/api/workspace/active");
         setActiveSession(data);
         if (data.sample_id) setCurrentSampleId(data.sample_id);
         if (data.sample_filename) setCurrentSampleFilename(data.sample_filename);
@@ -329,8 +322,19 @@ export default function DashboardShell() {
     }
     setSaveLoading(true);
     try {
+      const workspaceFile: XsltStorageFile = activeXSLTFile ?? {
+        id: activeSession.xslt_id,
+        name: activeSession.xslt_filename || "xslt",
+        description: "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        rule_count: 0,
+        documentPath: `${activeSession.xslt_id}.xslt`,
+        metadataPath: `${activeSession.xslt_id}.json`,
+      };
+
       const appendedWorkspace = await appendRulesToXSLTFile(
-        activeXSLTFile || { id: activeSession.xslt_id, name: activeSession.xslt_filename || "xslt", rule_count: 0, updated_at: new Date().toISOString() },
+        workspaceFile,
         ruleText
       );
       await apiClient.post("/rules", {
@@ -589,7 +593,7 @@ export default function DashboardShell() {
 
     // 2. Call PUT /api/workspace/active
     try {
-      const freshData = await apiClient.put("/api/workspace/active", {
+      const freshData = await apiClient.put<ActiveWorkspaceSession>("/api/workspace/active", {
         sample_id: payload.sampleId,
         xslt_id: payload.xsltSelection.file?.id ?? null,
         xslt_filename: payload.xsltSelection.file?.name ?? payload.xsltSelection.draft?.name ?? null,

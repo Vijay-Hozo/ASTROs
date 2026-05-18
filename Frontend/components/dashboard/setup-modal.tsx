@@ -94,7 +94,7 @@ export default function SetupModal({
         const formData = new FormData();
         formData.append("file", xmlFile);
 
-        const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8001'}/api/sample-upload`, {
+        const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://astros.onrender.com'}/api/sample-upload`, {
           method: "POST",
           body: formData,
         });
@@ -119,7 +119,7 @@ export default function SetupModal({
       }
 
       // 3. Link sample to XSLT
-      const linkRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8001'}/api/link`, {
+      const linkRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://astros.onrender.com'}/api/link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

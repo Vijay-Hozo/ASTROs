@@ -3,7 +3,7 @@
  * Centralized API layer with fetch wrapper, error handling, retry logic, and typed methods
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://astros.onrender.com';
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 2; // Retry failed requests up to 2 times
 const RETRY_DELAY = 1000; // Start with 1 second delay, exponential backoff

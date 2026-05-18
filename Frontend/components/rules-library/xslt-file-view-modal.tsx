@@ -21,6 +21,14 @@ interface XsltFileViewModalProps {
   onClose: () => void;
 }
 
+interface XsltFileDetailsResponse {
+  xslt_filename: string;
+  sample_filename: string;
+  rules: Array<{ rule_name: string; severity?: string; field?: string | null; operation?: string | null }>;
+  xslt_previews: string[];
+  related_logic: Array<Record<string, unknown>>;
+}
+
 export default function XsltFileViewModal({ file, onClose }: XsltFileViewModalProps) {
   const [rules, setRules] = useState<any[]>([]);
   const [xsltPreviews, setXsltPreviews] = useState<string[]>([]);
@@ -50,7 +58,7 @@ export default function XsltFileViewModal({ file, onClose }: XsltFileViewModalPr
 
     Promise.all([
       loadXsltFile(file.id).catch(() => ({ content: "", metadata: null })),
-      apiClient.get(`/api/xslt-files/${encodeURIComponent(file.id)}/details`)
+      apiClient.get<XsltFileDetailsResponse>(`/api/xslt-files/${encodeURIComponent(file.id)}/details`)
         .then((details) => details || null)
         .catch(() => null),
     ])
@@ -84,7 +92,7 @@ export default function XsltFileViewModal({ file, onClose }: XsltFileViewModalPr
     setError(null);
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8001'}/api/xslt-files/${encodeURIComponent(file.id)}/pdf`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://astros.onrender.com'}/api/xslt-files/${encodeURIComponent(file.id)}/pdf`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
