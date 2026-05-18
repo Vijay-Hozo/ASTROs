@@ -37,6 +37,20 @@ import SetupModal, { hasSetupCompleted } from "./setup-modal";
 import { appendRulesToXSLTFile } from "@/lib/xslt-manager";
 import { useXsltWorkspace } from "@/lib/xslt-workspace-context";
 
+type ExtractedTag = string | {
+  tag?: string;
+  xpath?: string;
+  sample_value?: string;
+  inferred_type?: string;
+  canonical_field?: string | null;
+};
+
+function getExtractedTagLabel(tag: ExtractedTag) {
+  if (typeof tag === "string") return tag;
+
+  return tag.tag || tag.canonical_field || tag.xpath || tag.sample_value || "";
+}
+
 export default function DashboardShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(false);
@@ -376,10 +390,13 @@ export default function DashboardShell() {
     setParseError(null);
   };
 
-  const handleTagClick = (tag: string) => {
+  const handleTagClick = (tag: ExtractedTag) => {
+    const tagLabel = getExtractedTagLabel(tag);
+    if (!tagLabel) return;
+
     setRuleText((prev) => {
-      if (!prev) return tag + " ";
-      return prev.endsWith(" ") ? prev + tag + " " : prev + " " + tag + " ";
+      if (!prev) return tagLabel + " ";
+      return prev.endsWith(" ") ? prev + tagLabel + " " : prev + " " + tagLabel + " ";
     });
     setTimeout(() => {
       if (ruleTextareaRef.current) {
@@ -865,18 +882,22 @@ export default function DashboardShell() {
                           Extracted Invoice Tags (Click to insert)
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {activeSession.extracted_tags.map(tag => (
-                            <button
-                              key={tag}
-                              type="button"
-                              onClick={() => handleTagClick(tag)}
-                              className="px-2.5 py-1 text-xs rounded-lg bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 font-mono transition shadow-sm hover:shadow active:scale-95 flex items-center gap-1 cursor-pointer"
-                              title={`Insert ${tag} into rule`}
-                            >
-                              <span>{tag}</span>
-                              <Plus className="h-3 w-3 opacity-60" />
-                            </button>
-                          ))}
+                          {activeSession.extracted_tags.map((tag) => {
+                            const tagLabel = getExtractedTagLabel(tag as ExtractedTag);
+
+                            return (
+                              <button
+                                key={tagLabel}
+                                type="button"
+                                onClick={() => handleTagClick(tag as ExtractedTag)}
+                                className="px-2.5 py-1 text-xs rounded-lg bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 font-mono transition shadow-sm hover:shadow active:scale-95 flex items-center gap-1 cursor-pointer"
+                                title={`Insert ${tagLabel} into rule`}
+                              >
+                                <span>{tagLabel}</span>
+                                <Plus className="h-3 w-3 opacity-60" />
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
