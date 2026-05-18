@@ -37,6 +37,11 @@ async def main():
         # xslt_sample_links migrations
         print(" - Modifying xslt_sample_links table...")
         await conn.execute(text("ALTER TABLE xslt_sample_links ADD COLUMN IF NOT EXISTS xslt_id varchar;"))
+        await conn.execute(text("ALTER TABLE xslt_sample_links ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();"))
+
+        # active_workspace migrations
+        print(" - Modifying active_workspace table...")
+        await conn.execute(text("ALTER TABLE active_workspace ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();"))
         
         print("[migration] Migrations executed successfully!")
         

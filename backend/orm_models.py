@@ -143,7 +143,7 @@ class XsltSampleLink(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     sample_id: Mapped[int] = mapped_column(ForeignKey("samples.id"))
     xslt_file_id: Mapped[str]  # UUID reference to Supabase Storage XSLT file
-    linked_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
 class ActiveWorkspace(Base):
