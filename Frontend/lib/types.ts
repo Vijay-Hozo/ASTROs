@@ -191,6 +191,7 @@ export interface ValidationReportRow {
   failed_rules: number;
   error_rules: number;
   execution_status: string;
+  xslt_filename?: string;
 }
 
 export interface ValidationDetailItem {

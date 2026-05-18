@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { DesktopSidebar, MobileSidebar } from "@/components/dashboard/sidebar";
 import Header from "@/components/validation-results/header";
-import SummaryCards from "./summary-cards";
 import ValidationTable from "./validation-table";
 import ResultDetailDrawer from "./result-detail-drawer";
 import FailedRulesList from "./failed-rules-list";
@@ -31,15 +30,14 @@ export default function ValidationResultsClient() {
         <Header onOpenSidebar={() => setMobileOpen(true)} />
 
         <main className="p-4 md:p-6">
-          <div className="mx-auto max-w-[1200px] space-y-6">
+          <div className="mx-auto max-w-[1550px] space-y-6">
             <ActiveXsltBanner compact />
-            <SummaryCards results={resultsList} isLoading={isLoading} />
 
             {error && <ErrorAlert error={error} onRetry={refetch} />}
 
             {hasResults ? (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                <div className="lg:col-span-2 space-y-6 min-w-0">
                   <ValidationTable
                     onView={(r) => setSelected(r)}
                     isLoading={isLoading}
@@ -48,7 +46,7 @@ export default function ValidationResultsClient() {
                     refetch={refetch}
                   />
                 </div>
-                <div className="lg:col-span-1 space-y-4">
+                <div className="lg:col-span-1 space-y-6 min-w-0">
                   <FailedRulesList results={resultsList} />
                 </div>
               </div>

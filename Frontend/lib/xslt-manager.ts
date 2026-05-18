@@ -44,14 +44,19 @@ function toFileRecord(id: string, metadata: XsltMetadataRecord | null): XsltStor
 }
 
 async function readMetadata(id: string): Promise<XsltMetadataRecord | null> {
-  const supabase = createClient();
-  const { data, error } = await supabase.storage.from(BUCKET_NAME).download(buildMetadataPath(id));
-  if (error || !data) return null;
-
-  const text = await data.text();
   try {
-    return JSON.parse(text) as XsltMetadataRecord;
-  } catch {
+    const supabase = createClient();
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).download(buildMetadataPath(id));
+    if (error || !data) return null;
+
+    const text = await data.text();
+    try {
+      return JSON.parse(text) as XsltMetadataRecord;
+    } catch {
+      return null;
+    }
+  } catch (err) {
+    console.warn(`Error reading metadata for XSLT file ${id}:`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -141,96 +146,141 @@ async function parseWorkspaceRules(ruleTexts: string[]): Promise<ParseRuleRespon
 }
 
 export async function listXsltFiles(): Promise<XsltStorageFile[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.storage.from(BUCKET_NAME).list("", { limit: 200 });
-  if (error) throw error;
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).list('', {
+      limit: 100,
+      offset: 0,
+      sortBy: { column: 'name', order: 'asc' }
+    });
+    
+    if (error) {
+      console.warn('Storage list error:', error.message);
+      return [];
+    }
 
-  const xsltItems = (data ?? []).filter((item) => item.name.endsWith(".xslt"));
-  const records = await Promise.all(
-    xsltItems.map(async (item) => {
-      const id = item.name.replace(/\.xslt$/, "");
-      const metadata = await readMetadata(id);
-      return toFileRecord(id, metadata);
-    }),
-  );
+    const xsltItems = (data ?? []).filter((item) => item.name.endsWith(".xslt"));
+    const records = await Promise.all(
+      xsltItems.map(async (item) => {
+        const id = item.name.replace(/\.xslt$/, "");
+        const metadata = await readMetadata(id);
+        return toFileRecord(id, metadata);
+      }),
+    );
 
-  return records.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+    return records.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  } catch (err) {
+    console.warn('Failed to list XSLT files:', err instanceof Error ? err.message : err);
+    return [];
+  }
 }
 
 export async function downloadXsltFile(id: string): Promise<string> {
-  const supabase = createClient();
-  const { data, error } = await supabase.storage.from(BUCKET_NAME).download(buildDocumentPath(id));
-  if (error || !data) throw error ?? new Error(`Unable to download XSLT file ${id}`);
-  return await data.text();
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).download(buildDocumentPath(id));
+    if (error) {
+      console.warn(`Storage error downloading XSLT file ${id}:`, error.message);
+      return "";
+    }
+    if (!data) {
+      console.warn(`No data returned when downloading XSLT file ${id}`);
+      return "";
+    }
+    return await data.text();
+  } catch (err) {
+    console.warn(`Error downloading XSLT file ${id}:`, err instanceof Error ? err.message : err);
+    return "";
+  }
 }
 
 export async function deleteXsltFile(id: string): Promise<void> {
-  const supabase = createClient();
-  const { error } = await supabase.storage.from(BUCKET_NAME).remove([buildDocumentPath(id), buildMetadataPath(id)]);
-  if (error) throw error;
+  try {
+    const supabase = createClient();
+    const { error } = await supabase.storage.from(BUCKET_NAME).remove([buildDocumentPath(id), buildMetadataPath(id)]);
+    if (error) {
+      console.warn(`Storage error deleting XSLT file ${id}:`, error.message);
+      // Don't throw - file may already be deleted or missing
+    }
+  } catch (err) {
+    console.warn(`Error deleting XSLT file ${id}:`, err instanceof Error ? err.message : err);
+    // Fail silently for delete operations
+  }
 }
 
 export async function createXsltFile(draft: XsltFileDraft): Promise<XsltStorageFile> {
-  const supabase = createClient();
-  const id = draft.id ?? crypto.randomUUID();
-  const now = new Date().toISOString();
-  const record = toFileRecord(id, {
-    name: draft.name,
-    description: draft.description ?? "",
-    created_at: now,
-    updated_at: now,
-    rule_count: draft.rule_count ?? 0,
-    rule_texts: draft.rule_texts ?? [],
-    parsed_rules: draft.parsed_rules ?? [],
-  });
+  try {
+    const supabase = createClient();
+    const id = draft.id ?? crypto.randomUUID();
+    const now = new Date().toISOString();
+    const record = toFileRecord(id, {
+      name: draft.name,
+      description: draft.description ?? "",
+      created_at: now,
+      updated_at: now,
+      rule_count: draft.rule_count ?? 0,
+      rule_texts: draft.rule_texts ?? [],
+      parsed_rules: draft.parsed_rules ?? [],
+    });
 
-  const document = draft.content ?? buildEmptyXsltDocument(draft.name);
-  const documentBlob = new Blob([document], { type: "application/xml" });
-  const metadataBlob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
+    const document = draft.content ?? buildEmptyXsltDocument(draft.name);
+    const documentBlob = new Blob([document], { type: "application/xml" });
+    const metadataBlob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
 
-  const [documentResult, metadataResult] = await Promise.all([
-    supabase.storage.from(BUCKET_NAME).upload(record.documentPath, documentBlob, { upsert: false, contentType: "application/xml" }),
-    supabase.storage.from(BUCKET_NAME).upload(record.metadataPath, metadataBlob, { upsert: false, contentType: "application/json" }),
-  ]);
+    const [documentResult, metadataResult] = await Promise.all([
+      supabase.storage.from(BUCKET_NAME).upload(record.documentPath, documentBlob, { upsert: false, contentType: "application/xml" }),
+      supabase.storage.from(BUCKET_NAME).upload(record.metadataPath, metadataBlob, { upsert: false, contentType: "application/json" }),
+    ]);
 
-  if (documentResult.error) throw documentResult.error;
-  if (metadataResult.error) throw metadataResult.error;
+    if (documentResult.error) throw documentResult.error;
+    if (metadataResult.error) throw metadataResult.error;
 
-  return record;
+    return record;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Failed to create XSLT file:", message);
+    throw new Error(`Failed to create XSLT file: ${message}`);
+  }
 }
 
 export async function updateXsltFile(id: string, draft: XsltFileDraft, expectedUpdatedAt?: string): Promise<XsltStorageFile> {
-  const supabase = createClient();
-  const existingMetadata = await readMetadata(id);
+  try {
+    const supabase = createClient();
+    const existingMetadata = await readMetadata(id);
 
-  if (expectedUpdatedAt && existingMetadata?.updated_at && existingMetadata.updated_at !== expectedUpdatedAt) {
-    throw new Error("This XSLT file has changed since it was loaded. Reload and try again.");
+    if (expectedUpdatedAt && existingMetadata?.updated_at && existingMetadata.updated_at !== expectedUpdatedAt) {
+      throw new Error("This XSLT file has changed since it was loaded. Reload and try again.");
+    }
+
+    const now = new Date().toISOString();
+    const record = toFileRecord(id, {
+      name: draft.name,
+      description: draft.description ?? (existingMetadata?.description as string | undefined) ?? "",
+      created_at: (existingMetadata?.created_at as string | undefined) ?? now,
+      updated_at: now,
+      rule_count: draft.rule_count ?? (existingMetadata?.rule_count as number | undefined) ?? 0,
+      rule_texts: draft.rule_texts ?? existingMetadata?.rule_texts ?? [],
+      parsed_rules: draft.parsed_rules ?? existingMetadata?.parsed_rules ?? [],
+    });
+
+    const document = draft.content ?? buildEmptyXsltDocument(draft.name);
+    const documentBlob = new Blob([document], { type: "application/xml" });
+    const metadataBlob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
+
+    const [documentResult, metadataResult] = await Promise.all([
+      supabase.storage.from(BUCKET_NAME).upload(record.documentPath, documentBlob, { upsert: true, contentType: "application/xml" }),
+      supabase.storage.from(BUCKET_NAME).upload(record.metadataPath, metadataBlob, { upsert: true, contentType: "application/json" }),
+    ]);
+
+    if (documentResult.error) throw documentResult.error;
+    if (metadataResult.error) throw metadataResult.error;
+
+    return record;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Failed to update XSLT file:", message);
+    throw new Error(`Failed to update XSLT file: ${message}`);
   }
-
-  const now = new Date().toISOString();
-  const record = toFileRecord(id, {
-    name: draft.name,
-    description: draft.description ?? (existingMetadata?.description as string | undefined) ?? "",
-    created_at: (existingMetadata?.created_at as string | undefined) ?? now,
-    updated_at: now,
-    rule_count: draft.rule_count ?? (existingMetadata?.rule_count as number | undefined) ?? 0,
-    rule_texts: draft.rule_texts ?? existingMetadata?.rule_texts ?? [],
-    parsed_rules: draft.parsed_rules ?? existingMetadata?.parsed_rules ?? [],
-  });
-
-  const document = draft.content ?? buildEmptyXsltDocument(draft.name);
-  const documentBlob = new Blob([document], { type: "application/xml" });
-  const metadataBlob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
-
-  const [documentResult, metadataResult] = await Promise.all([
-    supabase.storage.from(BUCKET_NAME).upload(record.documentPath, documentBlob, { upsert: true, contentType: "application/xml" }),
-    supabase.storage.from(BUCKET_NAME).upload(record.metadataPath, metadataBlob, { upsert: true, contentType: "application/json" }),
-  ]);
-
-  if (documentResult.error) throw documentResult.error;
-  if (metadataResult.error) throw metadataResult.error;
-
-  return record;
 }
 
 export async function createOrUpdateXsltFile(draft: XsltFileDraft, expectedUpdatedAt?: string): Promise<XsltStorageFile> {
@@ -241,16 +291,26 @@ export async function createOrUpdateXsltFile(draft: XsltFileDraft, expectedUpdat
 }
 
 export async function loadXsltFile(id: string): Promise<{ file: XsltStorageFile; content: string; metadata: XsltMetadataRecord | null }> {
-  const [file, content, metadata] = await Promise.all([
-    (async () => {
-      const meta = await readMetadata(id);
-      return toFileRecord(id, meta);
-    })(),
-    downloadXsltFile(id),
-    readMetadata(id),
-  ]);
+  try {
+    const [file, content, metadata] = await Promise.all([
+      (async () => {
+        const meta = await readMetadata(id);
+        return toFileRecord(id, meta);
+      })(),
+      downloadXsltFile(id),
+      readMetadata(id),
+    ]);
 
-  return { file, content, metadata };
+    return { file, content, metadata };
+  } catch (err) {
+    console.warn(`Error loading XSLT file ${id}:`, err instanceof Error ? err.message : err);
+    // Return a safe default even if file is missing
+    return {
+      file: toFileRecord(id, null),
+      content: "",
+      metadata: null,
+    };
+  }
 }
 
 export async function appendRulesToXSLTFile(

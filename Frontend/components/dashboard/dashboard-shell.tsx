@@ -20,6 +20,9 @@ import {
   TriangleAlert,
   Upload,
   X,
+  RefreshCw,
+  Tag,
+  Plus,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import Header from "./header";
@@ -30,7 +33,6 @@ import { apiClient } from "@/lib/api-client";
 import { ErrorAlert } from "../ui/error-alert";
 import { StatsCardLoadingSkeleton } from "../ui/loading-skeleton";
 import type { DashboardStats, ParseRuleResponse, XsltSelection } from "@/lib/types";
-import { XmlTagChips } from "./xml-tag-chips";
 import SetupModal, { hasSetupCompleted } from "./setup-modal";
 import { appendRulesToXSLTFile } from "@/lib/xslt-manager";
 import { useXsltWorkspace } from "@/lib/xslt-workspace-context";
@@ -38,11 +40,32 @@ import { useXsltWorkspace } from "@/lib/xslt-workspace-context";
 export default function DashboardShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(false);
+  const [currentSampleFilename, setCurrentSampleFilename] = useState<string | null>(null);
+  const [currentXsltFilename, setCurrentXsltFilename] = useState<string | null>(null);
+  const [currentSampleId, setCurrentSampleId] = useState<string | null>(null);
+  const [setupModalMode, setSetupModalMode] = useState<'initial' | 'reupload' | 'rechoose'>('initial');
+  const [setupModalInitialXsltSelection, setSetupModalInitialXsltSelection] = useState<XsltSelection | null>(null);
+  const [activeSession, setActiveSession] = useState<{
+    sample_id: string | null;
+    sample_filename: string | null;
+    xslt_id: string | null;
+    xslt_filename: string | null;
+    extracted_tags: string[];
+    status?: string;
+  }>({
+    sample_id: null,
+    sample_filename: null,
+    xslt_id: null,
+    xslt_filename: null,
+    extracted_tags: [],
+    status: "default",
+  });
 
   // --- Strict Local State as requested ---
   const [ruleText, setRuleText] = useState("");
   const [parsedRule, setParsedRule] = useState<any | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[] | null>(null);
+  const [isDragOverBatch, setIsDragOverBatch] = useState(false);
   const [validationResults, setValidationResults] = useState<any[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
@@ -71,10 +94,6 @@ export default function DashboardShell() {
     setActiveXSLTSelection,
     updateActiveXSLTWorkspace,
   } = useXsltWorkspace();
-
-  useEffect(() => {
-    setShowSetupModal(!hasSetupCompleted());
-  }, []);
 
   // Memoize options to prevent infinite loops
   const dashboardOptions = useMemo(() => ({
@@ -106,9 +125,28 @@ export default function DashboardShell() {
     }
   }, [toast]);
 
-  const selectedSampleXmlName = setupSampleFile?.name ?? "No sample XML selected";
-  const selectedXsltName = activeXSLTFile?.name ?? activeSelection?.draft?.name ?? "No XSLT file selected";
-  const validatedAgainstName = activeXSLTFile?.name ?? activeSelection?.draft?.name ?? "No XSLT file selected";
+  // Fetch current active workspace session from backend and keep activeSession in sync
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const data = await apiClient.get("/api/workspace/active");
+        setActiveSession(data);
+        if (data.sample_id) setCurrentSampleId(data.sample_id);
+        if (data.sample_filename) setCurrentSampleFilename(data.sample_filename);
+        if (data.xslt_id) {
+          setCurrentXsltFilename(data.xslt_filename);
+        }
+      } catch (err: any) {
+        console.warn("Failed to restore active workspace session (using defaults):", err?.message || err);
+        // Keep using the default empty session state if fetch fails
+      }
+    };
+    restoreSession();
+  }, []);
+
+  const selectedSampleXmlName = currentSampleFilename || activeSession.sample_filename || "No sample XML selected";
+  const selectedXsltName = activeXSLTFile?.name || currentXsltFilename || activeSession.xslt_filename || "No XSLT file selected";
+  const validatedAgainstName = activeXSLTFile?.name || currentXsltFilename || activeSession.xslt_filename || "No XSLT file selected";
 
   // Parse XML Helper for Preview Card
   const parsedPreviewData = useMemo(() => {
@@ -285,19 +323,23 @@ export default function DashboardShell() {
       setToast({ message: "Generated XSLT logic is missing", type: "error" });
       return;
     }
-    if (!activeXSLTFile) {
+    if (!activeSession.xslt_id) {
       setToast({ message: "Select an XSLT workspace before saving the rule", type: "error" });
       return;
     }
     setSaveLoading(true);
     try {
-      const appendedWorkspace = await appendRulesToXSLTFile(activeXSLTFile, ruleText);
+      const appendedWorkspace = await appendRulesToXSLTFile(
+        activeXSLTFile || { id: activeSession.xslt_id, name: activeSession.xslt_filename || "xslt", rule_count: 0, updated_at: new Date().toISOString() },
+        ruleText
+      );
       await apiClient.post("/rules", {
         rule_text: ruleText,
         severity: severity,
+        xslt_id: activeSession.xslt_id,
       });
       setSaveSuccess(true);
-      setToast({ message: "Validation rule added to library", type: "success" });
+      setToast({ message: `Rule saved and synced to ${activeSession.xslt_filename ?? "XSLT"}`, type: "success" });
       await updateActiveXSLTWorkspace({
         selection: activeSelection ? { ...activeSelection, file: appendedWorkspace.file } : { mode: "existing", file: appendedWorkspace.file },
         file: appendedWorkspace.file,
@@ -328,6 +370,20 @@ export default function DashboardShell() {
     setRuleText("");
     setParsedRule(null);
     setParseError(null);
+  };
+
+  const handleTagClick = (tag: string) => {
+    setRuleText((prev) => {
+      if (!prev) return tag + " ";
+      return prev.endsWith(" ") ? prev + tag + " " : prev + " " + tag + " ";
+    });
+    setTimeout(() => {
+      if (ruleTextareaRef.current) {
+        ruleTextareaRef.current.focus();
+        const len = ruleTextareaRef.current.value.length;
+        ruleTextareaRef.current.setSelectionRange(len, len);
+      }
+    }, 50);
   };
 
   // --- Step 3 Actions ---
@@ -384,6 +440,51 @@ export default function DashboardShell() {
     }
     setRandomPreviewIndex(nextIdx);
     setPreviewFile(uploadedFiles[nextIdx]);
+  };
+
+  const handleDragOverBatch = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverBatch(true);
+  };
+
+  const handleDragLeaveBatch = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverBatch(false);
+  };
+
+  const handleDropBatch = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverBatch(false);
+
+    const droppedFiles = e.dataTransfer?.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      const filesArray = Array.from(droppedFiles).filter((file) => file.type === "application/xml" || file.name.endsWith(".xml"));
+      if (filesArray.length === 0) {
+        setToast({ message: "Please drop XML files only", type: "error" });
+        return;
+      }
+
+      const nonEmptyFiles = filesArray.filter((file) => file.size > 0);
+      if (nonEmptyFiles.length === 0) {
+        setToast({ message: "Empty XML files are not accepted", type: "error" });
+        return;
+      }
+
+      setUploadedFiles(nonEmptyFiles);
+      setToast({
+        message: `${nonEmptyFiles.length} XML file${nonEmptyFiles.length === 1 ? "" : "s"} dropped and ready to validate`,
+        type: "success",
+      });
+
+      if (nonEmptyFiles.length > 0) {
+        const randIdx = Math.floor(Math.random() * nonEmptyFiles.length);
+        setRandomPreviewIndex(randIdx);
+        setPreviewFile(nonEmptyFiles[randIdx]);
+      }
+    }
   };
 
   const handleValidateBulk = async () => {
@@ -469,7 +570,10 @@ export default function DashboardShell() {
     setTimeout(() => setCopiedIndex(false), 2000);
   };
 
-  const handleSetupComplete = async (payload: { xmlFile: File | null; xsltSelection: XsltSelection }) => {
+  const handleSetupComplete = async (payload: { xmlFile: File | null; xsltSelection: XsltSelection; sampleId: number | null }) => {
+    // 1. Set extracted_tags = [] immediately (clears old chips from UI)
+    setActiveSession((prev) => ({ ...prev, extracted_tags: [] }));
+
     if (typeof window !== "undefined") {
       window.localStorage.setItem(
         "astro-dashboard-setup-config",
@@ -482,17 +586,39 @@ export default function DashboardShell() {
       );
     }
     setShowSetupModal(false);
+
+    // 2. Call PUT /api/workspace/active
+    try {
+      const freshData = await apiClient.put("/api/workspace/active", {
+        sample_id: payload.sampleId,
+        xslt_id: payload.xsltSelection.file?.id ?? null,
+        xslt_filename: payload.xsltSelection.file?.name ?? payload.xsltSelection.draft?.name ?? null,
+      });
+      // 3. On response, set full activeSession with new data
+      setActiveSession(freshData);
+      setCurrentSampleId(freshData.sample_id);
+      setCurrentSampleFilename(freshData.sample_filename);
+      setCurrentXsltFilename(freshData.xslt_filename);
+    } catch (err) {
+      console.error("Failed to update active workspace session:", err);
+    }
+
     setToast({ message: "Workspace setup completed", type: "success" });
-    // Keep the selected sample file available to other dashboard widgets
     setSetupSampleFile(payload.xmlFile ?? null);
-    // Show the selected file in the preview area
     if (payload.xmlFile) setPreviewFile(payload.xmlFile);
     await setActiveXSLTSelection(payload.xsltSelection);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <SetupModal open={showSetupModal} onComplete={handleSetupComplete} />
+      <SetupModal
+        open={showSetupModal}
+        onComplete={handleSetupComplete}
+        onClose={() => setShowSetupModal(false)}
+        initialSampleId={currentSampleId}
+        initialXsltSelection={activeSelection}
+        skipMarkSetupComplete={setupModalMode !== 'initial'}
+      />
       <DesktopSidebar />
       <MobileSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
 
@@ -506,22 +632,42 @@ export default function DashboardShell() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Selected Sample XML</p>
-                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{selectedSampleXmlName}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-900">{selectedSampleXmlName}</p>
+                      {activeSession.status === "default" && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                          default
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Selected XSLT File</p>
-                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{selectedXsltName}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-900">{selectedXsltName}</p>
+                      {activeSession.status === "default" && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                          default
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowSetupModal(true)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Rechoose / Reupload
-                </button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSetupModalMode('initial');
+                      setSetupModalInitialXsltSelection(activeSelection);
+                      setShowSetupModal(true);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Reselect Sample + XSLT
+                  </button>
+                </div>
               </div>
             </div>
             
@@ -627,10 +773,17 @@ export default function DashboardShell() {
                   // Upload prompting State
                   <div className="flex-1 flex flex-col justify-between">
                     <div
-                      className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition"
+                      className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-6 cursor-pointer transition ${
+                        isDragOverBatch
+                          ? "border-indigo-400 bg-indigo-50"
+                          : "border-slate-200 bg-slate-50/50 hover:bg-slate-50"
+                      }`}
                       onClick={() => fileInputRef.current?.click()}
+                      onDragOver={handleDragOverBatch}
+                      onDragLeave={handleDragLeaveBatch}
+                      onDrop={handleDropBatch}
                     >
-                      <Upload className="h-10 w-10 text-slate-400 mb-2" />
+                      <Upload className={`h-10 w-10 mb-2 transition ${isDragOverBatch ? "text-indigo-500" : "text-slate-400"}`} />
                       <p className="text-sm font-semibold text-slate-700 text-center">Drag and drop XML files here, or click to choose files</p>
                       <p className="text-xs text-slate-400 text-center mt-1">Accepts multiple files. Maximum size per file is 1MB.</p>
                     </div>
@@ -701,29 +854,28 @@ export default function DashboardShell() {
                 <div className="flex-1 flex flex-col justify-between space-y-4">
                   {/* Always visible input area */}
                   <div className="space-y-4">
-                    <XmlTagChips
-                      sampleFile={setupSampleFile}
-                      onTagClick={(tag: string) => {
-                        const textarea = ruleTextareaRef.current;
-                        if (!textarea) return;
-                        const start = textarea.selectionStart ?? textarea.value.length;
-                        const end = textarea.selectionEnd ?? textarea.value.length;
-                        const before = textarea.value.slice(0, start);
-                        const after = textarea.value.slice(end);
-                        const separator = before.length > 0 && !before.endsWith(" ") ? " " : "";
-                        const newValue = `${before}${separator}${tag}${after}`;
-                        
-                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                          window.HTMLTextAreaElement.prototype, "value"
-                        )?.set;
-                        nativeInputValueSetter?.call(textarea, newValue);
-                        textarea.dispatchEvent(new Event("input", { bubbles: true }));
-                        textarea.focus();
-                        const newCursor = start + separator.length + tag.length;
-                        textarea.setSelectionRange(newCursor, newCursor);
-                        setRuleText(newValue);
-                      }}
-                    />
+                    {activeSession.extracted_tags && activeSession.extracted_tags.length > 0 && (
+                      <div className="mb-3 space-y-1.5">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                          <Tag className="h-3 w-3 text-indigo-500" />
+                          Extracted Invoice Tags (Click to insert)
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {activeSession.extracted_tags.map(tag => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => handleTagClick(tag)}
+                              className="px-2.5 py-1 text-xs rounded-lg bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 font-mono transition shadow-sm hover:shadow active:scale-95 flex items-center gap-1 cursor-pointer"
+                              title={`Insert ${tag} into rule`}
+                            >
+                              <span>{tag}</span>
+                              <Plus className="h-3 w-3 opacity-60" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <textarea
                       ref={ruleTextareaRef}
                       value={ruleText}

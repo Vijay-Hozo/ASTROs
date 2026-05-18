@@ -2,7 +2,7 @@
 
 ## Overview
 
-The ASTROs backend uses SQLAlchemy ORM with support for both PostgreSQL (Supabase) and SQLite. The schema has been fully updated with complete field definitions for production use.
+The ASTROs backend uses SQLAlchemy ORM with native support exclusively for PostgreSQL (Supabase). The schema has been fully updated with complete field definitions for production use.
 
 ## Tables
 
@@ -135,25 +135,12 @@ System-wide statistics and metrics.
 
 ## Connection Configuration
 
-### Local Development (SQLite)
+### Supabase PostgreSQL (Required)
 ```
-DATABASE_URL=sqlite+aiosqlite:///database.db
-```
-
-### Local PostgreSQL
-```
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+SUPABASE_DB_URL=postgresql+asyncpg://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
 ```
 
-### Supabase Production
-```
-DATABASE_URL=postgresql+asyncpg://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
-```
-
-The backend automatically:
-1. Reads `SUPABASE_URL` from `.env` file
-2. If it starts with `postgresql+asyncpg://`, uses PostgreSQL
-3. Otherwise, falls back to SQLite at `DB_PATH` location
+The system strictly requires the `SUPABASE_DB_URL` environment variable. SQLite fallbacks have been completely removed from all backend layers to ensure production stability and consistent performance.
 
 ## Initialization
 
