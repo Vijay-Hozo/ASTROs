@@ -13,7 +13,7 @@ const defaultUrl = process.env.VERCEL_URL
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Invoice Rule Engine",
-  description: "The fastest way to build apps with Next.js and Supabase",
+  description: "This is a Invoice Rule Engine",
 };
 
 
