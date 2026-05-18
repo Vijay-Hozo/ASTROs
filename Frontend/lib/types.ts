@@ -24,6 +24,7 @@ export type RuleType =
 export type RuleSeverity = "low" | "medium" | "high";
 
 export interface ParsedRule {
+  description?: string | null;
   rule_type: RuleType;
   field?: string | null;
   operation?: string | null;
@@ -190,6 +191,7 @@ export interface ValidationReportRow {
   failed_rules: number;
   error_rules: number;
   execution_status: string;
+  xslt_filename?: string;
 }
 
 export interface ValidationDetailItem {

@@ -13,7 +13,6 @@ type SidebarProps = {
 const navItems = [
   { label: "Dashboard", icon: Home, href: "/dashboard" },
   { label: "Rules Library", icon: FileCode2, href: "/rules-library" },
-  { label: "View XSLT Files", icon: FileCode2, href: "/xslt-files" },
 //   { label: "Rule Engine", icon: Sparkles, href: "/rule-engine" },
 //   { label: "Validate Invoices", icon: FileCheck2, href: "/validate-invoices" },
 //   { label: "Invoices", icon: FileText },

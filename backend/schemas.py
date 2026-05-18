@@ -90,10 +90,18 @@ class ValidateWorkspaceRequest(BaseModel):
         return v.strip()
 
 
+class UpdateWorkspaceRequest(BaseModel):
+    """Request to update active workspace session."""
+    sample_id: Optional[int] = None
+    xslt_id: Optional[str] = None
+    xslt_filename: Optional[str] = None
+
+
 class SaveRuleRequest(BaseModel):
     """Persist a natural-language rule to the database."""
     rule_text: str = Field(..., min_length=5, max_length=500, description="Natural language rule in plain English (max 500 chars)")
     severity: str = Field(default="medium", description="Rule severity: low | medium | high | critical")
+    xslt_id: Optional[str] = Field(default=None, description="XSLT file ID to bind the rule to")
 
     @field_validator("severity")
     @classmethod
@@ -108,7 +116,8 @@ class SaveRuleRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "rule_text": "Payable amount must equal taxable amount plus tax amount",
-                "severity": "high"
+                "severity": "high",
+                "xslt_id": "some-xslt-id"
             }
         }
     }
@@ -236,6 +245,8 @@ class DashboardStats(BaseModel):
     total_passed: int
     total_failed: int
     pass_rate: float = Field(..., description="Percentage 0-100")
+    total_xslt_files: Optional[int] = 0
+    fail_rate: Optional[float] = 0.0
 
 
 class TrendPoint(BaseModel):
