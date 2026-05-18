@@ -14,7 +14,7 @@ import logging
 import zipfile
 from io import BytesIO
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -2686,8 +2686,19 @@ async def resolve_tag_endpoint(body: dict):
 
 
 @app.post("/reset-database")
-async def reset_database_endpoint(db: AsyncSession = Depends(get_db)):
+async def reset_database_endpoint(
+    x_admin_secret: str = Header(None),
+    db: AsyncSession = Depends(get_db)
+):
     """Truncate tables and clear storage bucket. No auto-seeding."""
+    # Verify admin secret
+    ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
+    if not ADMIN_SECRET or x_admin_secret != ADMIN_SECRET:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden — invalid admin secret"
+        )
+    
     from sqlalchemy import text
     try:
         # Truncate all tables

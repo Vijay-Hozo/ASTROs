@@ -134,7 +134,7 @@ class ParsedRuleSet:
 
 _SPLIT_PATTERN = re.compile(r"\n+|,\s*(?=[A-Za-z(])")
 _CONJUNCTION_SPLIT_PATTERN = re.compile(
-    r"\s+(?:and|then)\s+(?=(?:[A-Za-z][\w\s-]*?)\s+(?:is|required|must be|should be|cannot be|can't be|must not be|should not be|is not|must|should)\b)",
+    r"(?<![a-z_])\s+(?:and|then)\s+(?!(?:[a-z_]+\s+and\s+)?(?:[a-z_]+\s+)*(?:must not be|should not be|cannot be)\s+the same)(?=(?:[A-Za-z][\w\s-]*?)\s+(?:is|required|must be|should be|cannot be|can't be|must not be|should not be|is not|must|should)\b)",
     re.IGNORECASE,
 )
 _NUMBER_PATTERN = re.compile(r"-?\d+(?:\.\d+)?")
@@ -229,7 +229,7 @@ def _parse_number(value: str) -> float:
 
 def _parse_required(clause: str, order: int) -> dict[str, Any] | None:
     match = re.match(
-        r"^(?P<field>.+?)\s+(?:is|required|must be|should be|should|cannot be|can't be)?\s*(?:required|mandatory|present|non-empty|not empty|non empty|not null|must exist|should exist)$",
+        r"^(?P<field>.+?)\s+(?:is|required|must be|should be|should|cannot be|can't be)?\s*(?:required|mandatory|present|non-empty|not empty|non empty|not null|not blank|must exist|should exist|cannot be empty|must not be empty|should not be empty)$",
         clause,
         re.IGNORECASE,
     )
@@ -284,6 +284,10 @@ def _parse_numeric_comparison(clause: str, order: int) -> dict[str, Any] | None:
         (rf"^(?P<field>.+?)\s+(?:should be|must be|is|should|must)\s+greater than or equal to\s+{number_pattern}$", ">="),
         (rf"^(?P<field>.+?)\s+(?:should be|must be|is|should|must)\s+less than or equal to\s+{number_pattern}$", "<="),
     ]
+    # Add "!=" (not equal) patterns
+    patterns.append((rf"^(?P<field>.+?)\s+(?:should not be|must not be|is not|cannot be)\s+equal to\s+{number_pattern}$", "!="))
+    patterns.append((rf"^(?P<field>.+?)\s+(?:should|must)\s+not\s+equal\s+{number_pattern}$", "!="))
+    
     for pattern, operator in patterns:
         match = re.match(pattern, clause, re.IGNORECASE)
         if not match:
@@ -319,6 +323,42 @@ def _parse_numeric_comparison(clause: str, order: int) -> dict[str, Any] | None:
             max=_parse_number(between.group("max")),
             description=clause,
             confidence=0.95,
+            warnings=warnings,
+            order=order,
+        ).as_dict()
+
+    # Cross-field numeric comparison: "payable_amount must be greater than taxable_amount"
+    cross_match = re.match(
+        r"^(?P<field>.+?)\s+(?:should|must)(?:\s+not)?\s+(?:be|be)?\s*"
+        r"(?P<op>greater than|less than|greater than or equal to|"
+        r"less than or equal to|equal to|not equal to)\s+"
+        r"(?P<ref_field>[a-z][a-z_]+)$",
+        clause,
+        re.IGNORECASE,
+    )
+    if cross_match:
+        field, warnings = _canonicalize_field(cross_match.group("field"))
+        ref_field, ref_warnings = _canonicalize_field(cross_match.group("ref_field"))
+        warnings.extend(ref_warnings)
+        op_word = cross_match.group("op").lower()
+        op_map = {
+            "greater than": ">",
+            "less than": "<",
+            "greater than or equal to": ">=",
+            "less than or equal to": "<=",
+            "equal to": "==",
+            "not equal to": "!=",
+        }
+        operator = op_map.get(op_word, ">")
+        if not field or not ref_field:
+            return _unsupported_rule(clause, warnings, order)
+        return ParsedRuleObject(
+            rule_type="cross_field_validation",
+            field=field,
+            reference_field=ref_field,
+            operator=operator,
+            description=clause,
+            confidence=0.93,
             warnings=warnings,
             order=order,
         ).as_dict()
@@ -382,10 +422,16 @@ def _parse_amount_calculation(clause: str, order: int) -> dict[str, Any] | None:
         ).as_dict()
 
     sum_match = re.match(
-        r"^(?P<field>.+?)\s+(?:must be|should be|is)\s+equal to\s+(?P<left>.+?)\s+(?:\+|plus)\s+(?P<right>.+)$",
+        r"^(?P<field>.+?)\s+(?:must equal|should equal|equals|must be equal to|should be equal to|must be|should be|is)\s+equal\s+to\s+(?P<left>.+?)\s+(?:\+|plus)\s+(?P<right>.+)$",
         clause,
         re.IGNORECASE,
     )
+    if not sum_match:
+        sum_match = re.match(
+            r"^(?P<field>.+?)\s+(?:must equal|should equal|equals|must be equal to|should be equal to)\s+(?P<left>.+?)\s+(?:\+|plus)\s+(?P<right>.+)$",
+            clause,
+            re.IGNORECASE,
+        )
     if sum_match:
         field, warnings = _canonicalize_field(sum_match.group("field"))
         left_field, left_warnings = _canonicalize_field(sum_match.group("left"))
@@ -405,7 +451,83 @@ def _parse_amount_calculation(clause: str, order: int) -> dict[str, Any] | None:
             order=order,
         ).as_dict()
 
+    multiply_match = re.match(
+        r"^(?P<field>.+?)\s+(?:must equal|should equal|equals|must be equal to|must be)\s+(?P<left>.+?)\s+(?:\*|multiplied by|times)\s+(?P<right>.+)$",
+        clause,
+        re.IGNORECASE,
+    )
+    if multiply_match:
+        field, warnings = _canonicalize_field(multiply_match.group("field"))
+        left_field, left_warnings = _canonicalize_field(multiply_match.group("left"))
+        right_field, right_warnings = _canonicalize_field(multiply_match.group("right"))
+        warnings.extend(left_warnings)
+        warnings.extend(right_warnings)
+        if not field or not left_field or not right_field:
+            return _unsupported_rule(clause, warnings, order)
+        return ParsedRuleObject(
+            rule_type="amount_calculation",
+            field=field,
+            expression=f"{left_field} * {right_field}",
+            operator="multiply",
+            description=clause,
+            confidence=0.95,
+            warnings=warnings,
+            order=order,
+        ).as_dict()
+
     return None
+
+
+def _parse_not_same(clause: str, order: int) -> dict[str, Any] | None:
+    """Parse 'field1 and field2 must not be the same' patterns."""
+    match = re.match(
+        r"^(?P<field1>.+?)\s+and\s+(?P<field2>.+?)\s+"
+        r"(?:must not be|should not be|cannot be)\s+the same$",
+        clause,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    field1, w1 = _canonicalize_field(match.group("field1"))
+    field2, w2 = _canonicalize_field(match.group("field2"))
+    warnings = w1 + w2
+    if not field1 or not field2:
+        return _unsupported_rule(clause, warnings, order)
+    return ParsedRuleObject(
+        rule_type="cross_field_validation",
+        field=field1,
+        reference_field=field2,
+        operator="!=",
+        description=clause,
+        confidence=0.94,
+        warnings=warnings,
+        order=order,
+    ).as_dict()
+
+
+def _parse_string_length(clause: str, order: int) -> dict[str, Any] | None:
+    """Parse 'field must contain exactly N characters' patterns."""
+    match = re.match(
+        r"^(?P<field>.+?)\s+(?:must contain|should contain|must have|has)\s+"
+        r"exactly\s+(?P<length>\d+)\s+characters?$",
+        clause,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    field, warnings = _canonicalize_field(match.group("field"))
+    if not field:
+        return _unsupported_rule(clause, warnings, order)
+    length = int(match.group("length"))
+    return ParsedRuleObject(
+        rule_type="regex_validation",
+        field=field,
+        pattern=f"^.{{{length}}}$",
+        description=clause,
+        confidence=0.93,
+        warnings=warnings,
+        order=order,
+    ).as_dict()
 
 
 def _parse_regex_validation(clause: str, order: int) -> dict[str, Any] | None:
@@ -503,6 +625,8 @@ PARSERS: list[tuple[str, RuleParser]] = [
     ("numeric_comparison", _parse_numeric_comparison),
     ("date_validation", _parse_date_validation),
     ("amount_calculation", _parse_amount_calculation),
+    ("not_same", _parse_not_same),
+    ("string_length", _parse_string_length),
     ("regex_validation", _parse_regex_validation),
     ("enum_validation", _parse_enum_validation),
     ("cross_field_validation", _parse_cross_field_validation),
@@ -572,8 +696,9 @@ def _make_rule_template(rule: dict[str, Any], index: int) -> str:
             ">=": ">=",
             "<=": "&lt;=",
             "==": "=",
+            "!=": "!=",
         }
-        op_text = {">": "greater than", "<": "less than", ">=": "greater than or equal to", "<=": "less than or equal to", "==": "equal to"}.get(operator, "compare against")
+        op_text = {">": "greater than", "<": "less than", ">=": "greater than or equal to", "<=": "less than or equal to", "==": "equal to", "!=": "not equal to"}.get(operator, "compare against")
         actual_operator = op_map.get(operator, ">")
         value = rule.get("value")
         return f"""
@@ -599,6 +724,10 @@ def _make_rule_template(rule: dict[str, Any], index: int) -> str:
             left, right = [part.strip() for part in rule.get("expression", "").split("+", 1)]
             return f"""
   <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"amount_calculation\" field=\"{_xslt_safe(field)}\">\n      <xsl:variable name=\"actual\" select=\"number({field_xpath})\"/>\n      <xsl:variable name=\"expected\" select=\"number(/Invoice/{left}) + number(/Invoice/{right})\"/>\n      <xsl:choose>\n        <xsl:when test=\"not($actual = $expected)\">\n          <status>FAIL</status>\n          <message>{title} must equal {left} + {right}</message>\n        </xsl:when>\n        <xsl:otherwise>\n          <status>PASS</status>\n          <message>{title} matches calculated amount</message>\n        </xsl:otherwise>\n      </xsl:choose>\n    </rule_result>\n  </xsl:template>"""
+        if rule.get("expression") and "*" in rule.get("expression"):
+            left, right = [part.strip() for part in rule.get("expression", "").split("*", 1)]
+            return f"""
+  <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"amount_calculation\" field=\"{_xslt_safe(field)}\">\n      <xsl:variable name=\"actual\" select=\"number({field_xpath})\"/>\n      <xsl:variable name=\"expected\" select=\"number(/Invoice/{left}) * number(/Invoice/{right})\"/>\n      <xsl:choose>\n        <xsl:when test=\"not($actual = $expected)\">\n          <status>FAIL</status>\n          <message>{title} must equal {left} * {right}</message>\n        </xsl:when>\n        <xsl:otherwise>\n          <status>PASS</status>\n          <message>{title} matches calculated amount</message>\n        </xsl:otherwise>\n      </xsl:choose>\n    </rule_result>\n  </xsl:template>"""
 
     if rule_type == "regex_validation" and rule.get("pattern"):
         pattern = _xslt_safe(rule.get("pattern"))
@@ -615,11 +744,22 @@ def _make_rule_template(rule: dict[str, Any], index: int) -> str:
         operator = rule.get("operator") or "eq"
         comparison = {
             "eq": "=",
+            "==": "=",
+            "neq": "!=",
+            "!=": "!=",
             "lte": "&lt;=",
+            "<=": "&lt;=",
+            "gte": ">=",
+            ">=": ">=",
             "gt": ">",
+            ">": ">",
+            "lt": "&lt;",
+            "<": "&lt;",
         }.get(operator, "=")
         return f"""
-  <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"cross_field_validation\" field=\"{_xslt_safe(field)}\">\n      <xsl:choose>\n        <xsl:when test=\"not(string(/Invoice/{field})) or not(string(/Invoice/{rule.get('reference_field')}))\">\n          <status>FAIL</status>\n          <message>{title} requires both fields</message>\n        </xsl:when>\n        <xsl:when test=\"string(/Invoice/{field}) {comparison} string(/Invoice/{rule.get('reference_field')})\">\n          <status>PASS</status>\n          <message>{title} passes cross-field check</message>\n        </xsl:when>\n        <xsl:otherwise>\n          <status>FAIL</status>\n          <message>{title} failed cross-field check</message>\n        </xsl:otherwise>\n      </xsl:choose>\n    </rule_result>\n  </xsl:template>"""
+  <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"cross_field_validation\" field=\"{_xslt_safe(field)}\">\n      <xsl:choose>\n        <xsl:when test=\"not(string(/Invoice/{field})) or not(string(/Invoice/{rule.get('reference_field')}))\">
+          <status>FAIL</status>\n          <message>{title} requires both fields</message>\n        </xsl:when>\n        <xsl:when test=\"not(number(/Invoice/{field}) {comparison} number(/Invoice/{rule.get('reference_field')}))\">
+          <status>FAIL</status>\n          <message>{title} failed cross-field check</message>\n        </xsl:when>\n        <xsl:otherwise>\n          <status>PASS</status>\n          <message>{title} passes cross-field check</message>\n        </xsl:otherwise>\n      </xsl:choose>\n    </rule_result>\n  </xsl:template>"""
 
     return f"""
   <xsl:template name=\"{rule_name}\">\n    <rule_result order=\"{index}\" rule_type=\"unsupported\" field=\"{_xslt_safe(field)}\">\n      <status>SKIP</status>\n      <message>Unsupported rule: {title}</message>\n    </rule_result>\n  </xsl:template>"""

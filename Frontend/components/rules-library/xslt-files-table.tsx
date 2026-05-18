@@ -93,6 +93,13 @@ export default function XsltFilesTable({ refreshTrigger }: { refreshTrigger?: nu
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    
+    // Confirm deletion before proceeding
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the rule and its XSLT file "${deleteTarget.name}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+    
     setIsDeleting(true);
     try {
       await deleteXsltFile(deleteTarget.id);

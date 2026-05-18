@@ -198,6 +198,7 @@ export async function downloadXsltFile(id: string): Promise<string> {
 
 export async function deleteXsltFile(id: string): Promise<void> {
   try {
+    console.log(`[DELETE] Deleting XSLT file: ${id} at ${new Date().toISOString()}`);
     const supabase = createClient();
     const { error } = await supabase.storage.from(BUCKET_NAME).remove([buildDocumentPath(id), buildMetadataPath(id)]);
     if (error) {
