@@ -6,6 +6,7 @@ dataset/
 database.db
 venv/
 .venv/
+.venv312/
 backend/venv/
 backend/database.db
 backend/__pycache__/
