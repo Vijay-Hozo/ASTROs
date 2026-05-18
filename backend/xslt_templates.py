@@ -122,7 +122,7 @@ def _wrap_xslt(body: str) -> str:
 
 # ─── Rule type builders ───────────────────────────────────────────────────────
 
-def _xslt_required_field(rule: dict, xpath: str = None) -> str:
+def _xslt_required_field(rule: dict, xpath: str | None = None) -> str:
     field   = rule.get("field", "")
     message = rule.get("message", f"{field} is required")
     target_path = xpath if xpath else f"/Invoice/{field}"
