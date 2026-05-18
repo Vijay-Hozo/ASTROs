@@ -31,6 +31,7 @@ from orm_models import (
     XsltSampleLink,
     ActiveWorkspace,
     XsltFile,
+    AsyncSessionLocal,
 )
 from schemas import (
     ValidateRequest,
@@ -70,93 +71,6 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
 logger = logging.getLogger(__name__)
-
-async def ensure_defaults():
-    try:
-        # ── CHECK SAMPLE ──────────────────────────
-        sample_res = supabase.table("samples").select("id, filename, status").limit(1).execute()
-
-        if not sample_res.data:
-            default_xml = """<?xml version="1.0" encoding="UTF-8"?>
-<Invoice>
-  <invoice_id>DEFAULT-001</invoice_id>
-  <issue_date>2026-01-01</issue_date>
-  <seller_name>Default Seller</seller_name>
-  <buyer_name>Default Buyer</buyer_name>
-  <currency_code>INR</currency_code>
-  <taxable_amount>0.00</taxable_amount>
-  <tax_amount>0.00</tax_amount>
-  <payable_amount>0.00</payable_amount>
-  <tax_category>S</tax_category>
-  <buyer_vat>00DEFAULT0000A1Z1</buyer_vat>
-  <purchase_order>PO-DEFAULT-0001</purchase_order>
-  <line_items/>
-</Invoice>"""
-
-            sample_insert = supabase.table("samples").insert({
-                "filename": "default.xml",
-                "xml_content": default_xml,
-                "status": "default",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "extracted_tags": [
-                    "invoice_id", "issue_date", "seller_name", "buyer_name",
-                    "currency_code", "taxable_amount", "tax_amount",
-                    "payable_amount", "tax_category", "buyer_vat",
-                    "purchase_order", "line_items"
-                ]
-            }).execute()
-            sample_id = sample_insert.data[0]["id"]
-        else:
-            sample_id = sample_res.data[0]["id"]
-
-        # ── CHECK XSLT FILE ───────────────────────
-        xslt_res = supabase.table("xslt_files").select("id, filename, status").limit(1).execute()
-
-        if not xslt_res.data:
-            default_xslt = """<?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet version="1.0"
-  xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-  <xsl:template match="/">
-    <!-- Default India Rules XSLT -->
-    <!-- Rules will be appended here -->
-  </xsl:template>
-</xsl:stylesheet>"""
-
-            import uuid
-            xslt_insert = supabase.table("xslt_files").insert({
-                "id": str(uuid.uuid4()),
-                "filename": "india_rules.xslt",
-                "description": "Default India validation rules",
-                "xslt_content": default_xslt,
-                "rules_count": 0,
-                "status": "default",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }).execute()
-            xslt_id = xslt_insert.data[0]["id"]
-        else:
-            xslt_id = xslt_res.data[0]["id"]
-
-        # ── LINK SAMPLE + XSLT ────────────────────
-        link_res = supabase.table("xslt_sample_links").select("id").eq("sample_id", sample_id).eq("xslt_id", xslt_id).limit(1).execute()
-
-        if not link_res.data:
-            supabase.table("xslt_sample_links").insert({
-                "sample_id": sample_id,
-                "xslt_id": xslt_id,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }).execute()
-
-        # ── SET ACTIVE WORKSPACE ──────────────────
-        workspace_res = supabase.table("active_workspace").select("id").limit(1).execute()
-
-        if not workspace_res.data:
-            supabase.table("active_workspace").insert({
-                "sample_id": sample_id,
-                "xslt_id": xslt_id,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }).execute()
-    except Exception as e:
-        logger.error(f"ensure_defaults failed: {e}")
 # ─── Rule text sanity guard ───────────────────────────────────────────────────
 
 _SUSPICIOUS_TOKENS = [
@@ -578,8 +492,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 async def on_startup():
-    await init_db()
-    await ensure_defaults()
+    pass
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────
@@ -666,10 +579,16 @@ async def parse_rule(body: ParseRuleRequest):
     if not rule_text:
         raise HTTPException(status_code=422, detail="Rule text cannot be empty.")
 
+    # Normalize number words before LLM processing
+    from llm_rule_parser import preprocess_rule_text
+    normalized_rule = preprocess_rule_text(rule_text)
+    logger.info(f"[PARSE] Original: {rule_text}")
+    logger.info(f"[PARSE] Normalized: {normalized_rule}")
+
     # Step 1 — extract any XML tag tokens from the rule text
     # (tags are words that don't match canonical fields exactly)
-    tokens = extract_field_tokens(rule_text)
-    normalized_rule = rule_text
+    tokens = extract_field_tokens(normalized_rule)
+    resolved_rule = normalized_rule
     resolution_warnings = []
 
     for token in tokens:
@@ -681,7 +600,7 @@ async def parse_rule(body: ParseRuleRequest):
 
         if canonical:
             # replace the raw token in the rule text before sending to LLM
-            normalized_rule = normalized_rule.replace(token, canonical)
+            resolved_rule = resolved_rule.replace(token, canonical)
             if confidence < 1.0:
                 resolution_warnings.append(
                     f"'{token}' auto-mapped to '{canonical}' "
@@ -694,7 +613,7 @@ async def parse_rule(body: ParseRuleRequest):
         # Run CPU-bound LLM parsing off the event loop with timeout protection
         try:
             result = await asyncio.wait_for(
-                run_in_threadpool(parse_rule_and_build_xslt, normalized_rule),
+                run_in_threadpool(parse_rule_and_build_xslt, resolved_rule),
                 timeout=PARSE_TIMEOUT
             )
         except asyncio.TimeoutError:
@@ -751,11 +670,18 @@ async def parse_rule(body: ParseRuleRequest):
 async def create_rule(body: SaveRuleRequest, db: AsyncSession = Depends(get_db)):
     """Save a new English rule — LLM parses it and stores XSLT too."""
     _validate_rule_text(body.rule_text)
+    
+    # Normalize number words before LLM processing
+    from llm_rule_parser import preprocess_rule_text
+    normalized_for_llm = preprocess_rule_text(body.rule_text)
+    logger.info(f"[RULES] Original: {body.rule_text}")
+    logger.info(f"[RULES] Normalized: {normalized_for_llm}")
+    
     try:
         # Run CPU-bound LLM parsing off the event loop with timeout protection
         try:
             result = await asyncio.wait_for(
-                run_in_threadpool(parse_rule_and_build_xslt, body.rule_text),
+                run_in_threadpool(parse_rule_and_build_xslt, normalized_for_llm),
                 timeout=PARSE_TIMEOUT
             )
         except asyncio.TimeoutError:
@@ -781,6 +707,14 @@ async def create_rule(body: SaveRuleRequest, db: AsyncSession = Depends(get_db))
             xslt_id=body.xslt_id,
         )
         db.add(new_rule)
+        await db.flush()
+        
+        # Increment rules_count on xslt_files table if xslt_id is provided
+        if body.xslt_id:
+            xslt = (await db.execute(select(XsltFile).where(XsltFile.id == body.xslt_id))).scalar_one_or_none()
+            if xslt:
+                xslt.rules_count = (xslt.rules_count or 0) + 1
+        
         await db.commit()
         await db.refresh(new_rule)
 
@@ -1103,6 +1037,117 @@ async def validate_workspace(body: ValidateWorkspaceRequest):
         raise HTTPException(status_code=500, detail="Workspace validation failed")
 
 
+# ─── Validate and Store Results in DB ─────────────────────────────────────────
+
+@app.post("/api/validate-and-store")
+async def validate_and_store(
+  request: Request,
+  db: AsyncSession = Depends(get_db)
+):
+  """
+  Validate XML against active workspace XSLT rules
+  and store the results in DB for the results module.
+  """
+  try:
+    body = await request.json()
+    xml_content  = body.get("xml_content", "")
+    xslt_content = body.get("xslt_content", "")
+    xslt_name    = body.get("xslt_name", "")
+    filename     = body.get("filename", "upload.xml")
+    xslt_id      = body.get("xslt_id", None)
+
+    if len(xml_content) > MAX_XML_SIZE:
+      raise HTTPException(status_code=413, detail="XML too large")
+
+    # Validate XML format
+    try:
+      from lxml import etree as _etree
+      _etree.fromstring(xml_content.encode())
+    except Exception as e:
+      raise HTTPException(status_code=400, detail=f"Invalid XML: {str(e)[:80]}")
+
+    # Run XSLT validation
+    result = await asyncio.wait_for(
+      run_in_threadpool(
+        execute_workspace_xslt, xslt_content, xml_content, xslt_name
+      ),
+      timeout=BATCH_VALIDATION_TIMEOUT
+    )
+
+    if result.get("error"):
+      raise HTTPException(status_code=400, detail=result["error"])
+
+    # Store invoice in DB
+    new_invoice = Invoice(
+      filename=filename,
+      xml_content=xml_content,
+      file_size=len(xml_content.encode()),
+      upload_status="validated",
+      processed_at=datetime.utcnow(),
+      xslt_filename=xslt_name
+    )
+    db.add(new_invoice)
+    await db.flush()
+
+    # Store each rule result
+    results = result.get("results", [])
+    passed = 0
+    failed = 0
+    for r in results:
+      status = r.get("status", "FAIL")
+      if status == "PASS":
+        passed += 1
+      else:
+        failed += 1
+      vr = ValidationResultORM(
+        invoice_id=new_invoice.id,
+        rule_id=None,
+        rule_text=r.get("rule_text", ""),
+        status=status,
+        message=r.get("message", ""),
+        rule_type=r.get("rule_type"),
+        rule_severity=r.get("severity", "high"),
+        field_checked=r.get("field"),
+        xslt_result=str(r.get("xslt_result", ""))[:500] if r.get("xslt_result") else None,
+        validated_at=datetime.utcnow()
+      )
+      db.add(vr)
+
+    new_invoice.total_rules_tested = len(results)
+    new_invoice.passed_count = passed
+    new_invoice.failed_count = failed
+
+    # Store file validation report
+    report = FileValidationReport(
+      file_id=new_invoice.id,
+      passed_rules=passed,
+      failed_rules=failed,
+      summary_json=json.dumps({
+        "total": len(results),
+        "passed": passed,
+        "failed": failed
+      }),
+      execution_status="COMPLETED"
+    )
+    db.add(report)
+    await db.commit()
+
+    return {
+      **result,
+      "invoice_db_id": new_invoice.id,
+      "stored": True
+    }
+
+  except HTTPException:
+    raise
+  except Exception as e:
+    await db.rollback()
+    import traceback
+    traceback.print_exc()
+    raise HTTPException(status_code=500,
+      detail=f"Validate and store failed: {str(e)[:100]}")
+
+
 # ─── Upload XML file ──────────────────────────────────────────────────────────
 
 @app.post("/invoices/upload", response_model=InvoiceResponse)
@@ -1317,6 +1362,15 @@ async def list_results(db: AsyncSession = Depends(get_db)):
             elif total > 0:
                 message = f"{passed}/{total} checks passed"
 
+            # Fetch xslt_id from xslt_files table by filename
+            xslt_id = None
+            if inv.xslt_filename:
+                xslt_row = (await db.execute(
+                    select(XsltFile).where(XsltFile.filename == inv.xslt_filename)
+                )).scalar_one_or_none()
+                if xslt_row:
+                    xslt_id = str(xslt_row.id)
+
             out.append(
                 {
                     "id": inv.id,
@@ -1331,6 +1385,7 @@ async def list_results(db: AsyncSession = Depends(get_db)):
                     "error_rules": errors,
                     "execution_status": _safe_text(inv.upload_status or "unknown", max_len=40).upper(),
                     "xslt_filename": inv.xslt_filename,
+                    "xslt_id": xslt_id,
                 }
             )
         return out
@@ -1709,8 +1764,8 @@ async def download_all_results_zip(db: AsyncSession = Depends(get_db)):
 # ─── Sample Management ────────────────────────────────────────────────────────
 
 @app.post("/api/sample-upload")
-async def upload_sample(file: UploadFile = File(...)):
-    """Upload a sample XML file, extract tags, store in Supabase."""
+async def upload_sample(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Upload a sample XML file, extract tags, store via SQLAlchemy."""
     try:
         if not file.filename.endswith(".xml"):
             raise HTTPException(status_code=400, detail="Only .xml files accepted")
@@ -1729,53 +1784,64 @@ async def upload_sample(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=f"Invalid XML file: {str(e)[:80]}")
 
         # Extract tags
-        tags_result = extract_xml_tags(xml_str)
-        tags_list = tags_result.get("known_tags", []) + tags_result.get("unknown_tags", [])
-
-        # Store in Supabase directly
-        sample_insert = supabase.table("samples").insert({
-            "filename": file.filename,
-            "xml_content": xml_str,
-            "extracted_tags": tags_list,
-            "status": "active"
-        }).execute()
-        new_sample_id = sample_insert.data[0]["id"]
-
-        # Also update active workspace to point to this new sample!
         try:
-            ws_res = supabase.table("active_workspace").select("id").limit(1).execute()
-            if ws_res.data:
-                supabase.table("active_workspace").update({"sample_id": new_sample_id}).eq("id", ws_res.data[0]["id"]).execute()
-            else:
-                supabase.table("active_workspace").insert({"sample_id": new_sample_id}).execute()
+            tags_result = extract_xml_tags(xml_str)
+            tags_list = tags_result.get("known_tags", []) + tags_result.get("unknown_tags", [])
         except Exception as e:
-            logger.warning(f"Failed to update active workspace sample_id: {e}")
+            logger.error(f"Tag extraction error for {file.filename}: {str(e)}")
+            tags_list = []
 
+        # Store via SQLAlchemy
+        tags_json_str = json.dumps(tags_list)
+        try:
+            new_sample = Sample(
+                filename=file.filename,
+                xml_content=xml_str,
+                tags_json=tags_json_str,
+                status="active",
+                extracted_tags=tags_list,
+                created_at=datetime.utcnow()
+            )
+            db.add(new_sample)
+            await db.flush()
+            new_sample_id = new_sample.id
+            logger.info(f"Sample {file.filename} (ID: {new_sample_id}) uploaded successfully")
+        except Exception as e:
+            logger.error(f"Database insert error for {file.filename}: {str(e)}", exc_info=True)
+            await db.rollback()
+            raise HTTPException(status_code=500, detail="Failed to store sample in database")
+
+        await db.commit()
         return {
             "sample_id": new_sample_id,
             "filename": file.filename,
-            "tags": tags_list,
+            "extracted_tags": tags_list,
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Sample upload failed: {str(e)[:100]}")
-        raise HTTPException(status_code=500, detail="Sample upload failed")
+        logger.error(f"Sample upload failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Sample upload failed: {str(e)[:100]}")
 
 
 @app.get("/api/sample/current")
-async def get_current_sample():
-    """Get the most recently created sample from Supabase."""
+async def get_current_sample(db: AsyncSession = Depends(get_db)):
+    """Get the most recently created sample via SQLAlchemy."""
     try:
-        res = supabase.table("samples").select("id, filename, extracted_tags, status").order("created_at", desc=True).limit(1).execute()
-        if not res.data:
+        stmt = select(Sample).order_by(Sample.created_at.desc()).limit(1)
+        sample = (await db.execute(stmt)).scalar_one_or_none()
+        if not sample:
             return {"sample_id": None, "filename": None, "extracted_tags": []}
         
-        sample = res.data[0]
+        tags = []
+        try:
+            tags = json.loads(sample.tags_json or "[]")
+        except Exception:
+            pass
         return {
-            "sample_id": sample["id"],
-            "filename": sample["filename"],
-            "extracted_tags": sample.get("extracted_tags") or [],
+            "sample_id": sample.id,
+            "filename": sample.filename,
+            "extracted_tags": tags,
         }
     except Exception as e:
         logger.error(f"Failed to get current sample: {str(e)[:100]}")
@@ -1783,125 +1849,244 @@ async def get_current_sample():
 
 
 @app.get("/api/workspace/active")
-async def get_active_workspace():
+async def get_active_workspace(db: AsyncSession = Depends(get_db)):
     try:
-        workspace = supabase.table("active_workspace").select("sample_id, xslt_id").limit(1).execute()
-
-        if not workspace.data:
-            await ensure_defaults()
-            workspace = supabase.table("active_workspace").select("sample_id, xslt_id").limit(1).execute()
-
-        if not workspace.data:
-            # Return empty workspace if nothing is set
+        ws = (await db.execute(select(ActiveWorkspace).limit(1))).scalar_one_or_none()
+        if not ws:
             return {
                 "sample_id": None,
                 "sample_filename": None,
                 "xslt_id": None,
                 "xslt_filename": None,
-                "extracted_tags": [],
-                "status": "empty"
+                "extracted_tags": []
             }
 
-        row = workspace.data[0]
-        
-        # Safely fetch sample if ID exists
         sample = None
-        if row.get("sample_id"):
-            try:
-                sample_result = supabase.table("samples").select("id, filename, extracted_tags, status").eq("id", row["sample_id"]).execute()
-                sample = sample_result.data[0] if sample_result.data else None
-            except Exception as e:
-                logger.warning(f"Failed to fetch sample {row.get('sample_id')}: {e}")
-        
-        # Safely fetch xslt if ID exists
+        if ws.sample_id:
+            sample = (await db.execute(select(Sample).where(Sample.id == int(ws.sample_id)))).scalar_one_or_none()
+
         xslt = None
-        if row.get("xslt_id"):
-            try:
-                xslt_result = supabase.table("xslt_files").select("id, filename, status").eq("id", row["xslt_id"]).execute()
-                xslt = xslt_result.data[0] if xslt_result.data else None
-            except Exception as e:
-                logger.warning(f"Failed to fetch xslt {row.get('xslt_id')}: {e}")
+        if ws.xslt_id:
+            xslt = (await db.execute(select(XsltFile).where(XsltFile.id == str(ws.xslt_id)))).scalar_one_or_none()
+
+        tags = []
+        if sample and sample.tags_json:
+            try: tags = json.loads(sample.tags_json)
+            except Exception: pass
 
         return {
-            "sample_id": sample["id"] if sample else None,
-            "sample_filename": sample["filename"] if sample else None,
-            "xslt_id": xslt["id"] if xslt else None,
-            "xslt_filename": xslt["filename"] if xslt else None,
-            "extracted_tags": (sample.get("extracted_tags") or []) if sample else [],
-            "status": sample.get("status") if sample else "empty"
+            "sample_id": int(sample.id) if sample else None,
+            "sample_filename": sample.filename if sample else None,
+            "xslt_id": str(xslt.id) if xslt else None,
+            "xslt_filename": xslt.filename if xslt else None,
+            "extracted_tags": tags
         }
     except Exception as e:
         logger.error(f"Failed to get active workspace: {str(e)[:100]}")
-        # Return empty workspace instead of throwing error
         return {
             "sample_id": None,
             "sample_filename": None,
             "xslt_id": None,
             "xslt_filename": None,
-            "extracted_tags": [],
-            "status": "error"
+            "extracted_tags": []
         }
 
 
-@app.put("/api/workspace/active")
-async def update_active_workspace(body: UpdateWorkspaceRequest):
+@app.get("/api/xslt-files")
+async def list_xslt_files(db: AsyncSession = Depends(get_db)):
+    """
+    List all XSLT files from the database.
+    Returns the DB row ID (not Storage UUID), filename, and metadata.
+    """
     try:
-        ws_res = supabase.table("active_workspace").select("id").limit(1).execute()
-        if not ws_res.data:
-            await ensure_defaults()
-            ws_res = supabase.table("active_workspace").select("id").limit(1).execute()
-        
-        ws_id = ws_res.data[0]["id"]
-        update_data = {}
-
-        if body.sample_id is not None:
-            update_data["sample_id"] = body.sample_id
-            # STATUS UPDATES ON REAL SELECTION
-            try:
-                supabase.table("samples").update({ "status": "active" }).eq("id", body.sample_id).execute()
-            except Exception as e:
-                logger.warning(f"Supabase sample status update failed: {e}")
-
-        if body.xslt_id is not None:
-            update_data["xslt_id"] = body.xslt_id
-            # Ensure xslt_file exists in Supabase xslt_files table
-            try:
-                xslt_check = supabase.table("xslt_files").select("id").eq("id", body.xslt_id).execute()
-                if not xslt_check.data and body.xslt_filename:
-                    supabase.table("xslt_files").insert({
-                        "id": body.xslt_id,
-                        "filename": body.xslt_filename,
-                        "status": "active",
-                        "created_at": datetime.now(timezone.utc).isoformat()
-                    }).execute()
-                else:
-                    # STATUS UPDATES ON REAL SELECTION
-                    supabase.table("xslt_files").update({ "status": "active" }).eq("id", body.xslt_id).execute()
-            except Exception as e:
-                logger.warning(f"Supabase xslt_files check/update failed: {e}")
-
-        if update_data:
-            supabase.table("active_workspace").update(update_data).eq("id", ws_id).execute()
-
-        return await get_active_workspace()
+        result = await db.execute(
+            select(XsltFile).order_by(XsltFile.created_at.desc())
+        )
+        files = result.scalars().all()
+        return [
+            {
+                "id": str(f.id),
+                "filename": f.filename,
+                "description": f.description,
+                "rules_count": f.rules_count or f.rule_count or 0,
+                "created_at": f.created_at.isoformat() if f.created_at else None
+            }
+            for f in files
+        ]
     except Exception as e:
-        logger.error(f"Failed to update active workspace: {str(e)[:100]}")
-        raise HTTPException(status_code=500, detail="Failed to update active workspace")
+        logger.error(f"Failed to list xslt files: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to list XSLT files")
+
+
+@app.post("/api/xslt-files")
+async def create_xslt_file_db(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Create or register an XSLT file in the database.
+    Frontend calls this after creating the file in Supabase Storage.
+    """
+    try:
+        raw = await request.json()
+        file_id = raw.get("id")
+        filename = raw.get("filename")
+        description = raw.get("description", "")
+        
+        if not file_id or not filename:
+            raise HTTPException(status_code=400, detail="id and filename required")
+        
+        # Check if already exists
+        existing = await db.execute(
+            select(XsltFile).where(XsltFile.id == str(file_id))
+        )
+        xslt = existing.scalar_one_or_none()
+        
+        if xslt:
+            # Already exists, just update
+            xslt.filename = str(filename)
+            xslt.description = str(description)
+        else:
+            # Create new
+            xslt = XsltFile(
+                id=str(file_id),
+                filename=str(filename),
+                description=str(description) if description else None,
+                rules_count=0,
+                rule_count=0
+            )
+            db.add(xslt)
+        
+        await db.commit()
+        await db.refresh(xslt)
+        
+        return {
+            "id": str(xslt.id),
+            "filename": xslt.filename,
+            "description": xslt.description,
+            "rules_count": xslt.rules_count or xslt.rule_count or 0,
+            "created_at": xslt.created_at.isoformat() if xslt.created_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to create xslt file: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to create XSLT file")
+
+
+@app.put("/api/workspace/active")
+async def update_active_workspace(request: Request, db: AsyncSession = Depends(get_db)):
+  try:
+    raw = await request.json()
+    print("WORKSPACE BODY:", raw)
+
+    sample_id = raw.get("sample_id")
+    xslt_id   = raw.get("xslt_id")
+
+    if not sample_id or not xslt_id:
+      raise HTTPException(status_code=400,
+        detail="sample_id and xslt_id are required")
+
+    # sample_id must be INTEGER — cast it
+    sample_id = int(sample_id)
+    # xslt_id must be VARCHAR — cast it
+    xslt_id = str(xslt_id)
+    # updated_at must be NAIVE datetime (no timezone)
+    from datetime import datetime
+    now = datetime.utcnow()  # naive, matches TIMESTAMP WITHOUT TIME ZONE
+
+    from sqlalchemy import text
+    await db.execute(
+      text("""
+        INSERT INTO active_workspace (id, user_id, sample_id, xslt_id, updated_at)
+        VALUES (1, 'default', :sample_id, :xslt_id, :updated_at)
+        ON CONFLICT (id) DO UPDATE SET
+          sample_id  = EXCLUDED.sample_id,
+          xslt_id    = EXCLUDED.xslt_id,
+          updated_at = EXCLUDED.updated_at
+      """),
+      {
+        "sample_id":  sample_id,
+        "xslt_id":    xslt_id,
+        "updated_at": now
+      }
+    )
+    await db.commit()
+
+    # Fetch sample row
+    sample_res = await db.execute(
+      text("SELECT id, filename, extracted_tags FROM samples WHERE id = :id"),
+      {"id": sample_id}
+    )
+    sample_row = sample_res.mappings().first()
+
+    # Fetch xslt row
+    xslt_res = await db.execute(
+      text("SELECT id, filename FROM xslt_files WHERE id = :id"),
+      {"id": xslt_id}
+    )
+    xslt_row = xslt_res.mappings().first()
+
+    if not sample_row or not xslt_row:
+      raise HTTPException(status_code=404,
+        detail="Sample or XSLT not found after workspace update")
+
+    # Parse tags safely
+    raw_tags = sample_row["extracted_tags"]
+    if isinstance(raw_tags, str):
+      tags = json.loads(raw_tags)
+    elif isinstance(raw_tags, list):
+      tags = raw_tags
+    else:
+      tags = []
+
+    # If tags are objects extract just the tag name string
+    if tags and isinstance(tags[0], dict):
+      tags = [t.get("tag") or t.get("name", "") for t in tags]
+
+    return {
+      "sample_id":       sample_row["id"],
+      "sample_filename": sample_row["filename"],
+      "xslt_id":         xslt_row["id"],
+      "xslt_filename":   xslt_row["filename"],
+      "extracted_tags":  tags
+    }
+
+  except HTTPException:
+    raise
+  except Exception as e:
+    import traceback
+    traceback.print_exc()
+    await db.rollback()
+    raise HTTPException(status_code=500,
+      detail=f"Failed to update active workspace: {str(e)}")
+
+
+@app.delete("/api/workspace/active")
+async def delete_active_workspace(db: AsyncSession = Depends(get_db)):
+    """Clear the active workspace by deleting all rows."""
+    try:
+        from sqlalchemy import text
+        await db.execute(text("DELETE FROM active_workspace;"))
+        await db.commit()
+        return {"status": "success", "message": "Active workspace cleared"}
+    except Exception as e:
+        logger.error(f"Failed to delete active workspace: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail="Failed to delete active workspace")
 
 
 @app.get("/api/samples")
-async def list_samples():
-    """List all uploaded sample XMLs from Supabase."""
+async def list_samples(db: AsyncSession = Depends(get_db)):
+    """List all uploaded sample XMLs via SQLAlchemy."""
     try:
-        res = supabase.table("samples").select("id, filename, created_at, status").order("created_at", desc=True).execute()
+        stmt = select(Sample).order_by(Sample.created_at.desc())
+        samples = (await db.execute(stmt)).scalars().all()
         return [
             {
-                "id": s["id"],
-                "filename": s["filename"],
-                "created_at": s.get("created_at") or datetime.utcnow().isoformat(),
-                "status": s.get("status") or "default"
+                "id": s.id,
+                "filename": s.filename,
+                "created_at": s.created_at.isoformat() if s.created_at else datetime.utcnow().isoformat(),
+                "status": s.status or "default"
             }
-            for s in res.data
+            for s in samples
         ]
     except Exception as e:
         logger.error(f"Failed to list samples: {str(e)[:100]}")
@@ -1909,8 +2094,8 @@ async def list_samples():
 
 
 @app.post("/api/link")
-async def link_sample_to_xslt(body: dict):
-    """Link a sample XML to an XSLT file in Supabase."""
+async def link_sample_to_xslt(body: dict, db: AsyncSession = Depends(get_db)):
+    """Link a sample XML to an XSLT file via SQLAlchemy."""
     try:
         sample_id = body.get("sample_id")
         xslt_file_id = body.get("xslt_id")
@@ -1919,44 +2104,32 @@ async def link_sample_to_xslt(body: dict):
             raise HTTPException(status_code=400, detail="sample_id and xslt_id required")
 
         # Delete any existing link for this sample OR this XSLT file
-        try:
-            existing = supabase.table("xslt_sample_links").select("id").eq("sample_id", sample_id).execute()
-            for link in existing.data:
-                supabase.table("xslt_sample_links").delete().eq("id", link["id"]).execute()
-                
-            existing_xslt = supabase.table("xslt_sample_links").select("id").eq("xslt_id", xslt_file_id).execute()
-            for link in existing_xslt.data:
-                supabase.table("xslt_sample_links").delete().eq("id", link["id"]).execute()
-        except Exception as e:
-            logger.warning(f"Supabase link cleanup warning: {e}")
+        stmt1 = select(XsltSampleLink).where(XsltSampleLink.sample_id == sample_id)
+        links1 = (await db.execute(stmt1)).scalars().all()
+        for l in links1: db.delete(l)
+
+        stmt2 = select(XsltSampleLink).where(XsltSampleLink.xslt_file_id == str(xslt_file_id))
+        links2 = (await db.execute(stmt2)).scalars().all()
+        for l in links2: db.delete(l)
 
         # Create new link
-        supabase.table("xslt_sample_links").insert({
-            "sample_id": sample_id,
-            "xslt_id": str(xslt_file_id),
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }).execute()
+        new_link = XsltSampleLink(sample_id=sample_id, xslt_file_id=str(xslt_file_id), xslt_id=str(xslt_file_id))
+        db.add(new_link)
 
         # Also update active workspace
-        try:
-            ws_res = supabase.table("active_workspace").select("id").limit(1).execute()
-            if ws_res.data:
-                supabase.table("active_workspace").update({
-                    "sample_id": sample_id,
-                    "xslt_id": str(xslt_file_id)
-                }).eq("id", ws_res.data[0]["id"]).execute()
-        except Exception as e:
-            logger.warning(f"Active workspace sync warning: {e}")
+        ws = (await db.execute(select(ActiveWorkspace).limit(1))).scalar_one_or_none()
+        if ws:
+            ws.sample_id = sample_id
+            ws.xslt_id = str(xslt_file_id)
 
+        await db.commit()
         return {
             "message": "Sample linked to XSLT",
             "sample_id": sample_id,
-            "xslt_id": xslt_file_id,
+            "xslt_id": xslt_file_id
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Link failed: {str(e)[:100]}")
+        logger.error(f"Failed to link sample to XSLT: {str(e)[:100]}")
         raise HTTPException(status_code=500, detail="Failed to link sample to XSLT")
 
 
@@ -1965,64 +2138,76 @@ async def link_sample_to_xslt(body: dict):
 
 
 
-@app.get("/api/results/{id}/tags")
-async def get_result_tags(id: int, db: AsyncSession = Depends(get_db)):
-    """Extract XML tags from the validated invoice content associated with a validation result ID."""
+@app.get("/api/results/{invoice_id}/tags")
+async def get_result_tags(invoice_id: int, db: AsyncSession = Depends(get_db)):
+    """Extract XML tags from the validated invoice content."""
     try:
-        # Get ValidationResult by ID to fetch the associated invoice_id
-        val_result = (
-            await db.execute(select(ValidationResultORM).where(ValidationResultORM.id == id))
-        ).scalars().first()
-        if not val_result:
-            raise HTTPException(status_code=404, detail="Validation result not found")
-        
-        invoice_id = val_result.invoice_id
+        # Query Invoice directly by invoice_id
         invoice = (
             await db.execute(select(Invoice).where(Invoice.id == invoice_id))
-        ).scalars().first()
+        ).scalar_one_or_none()
+
         if not invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
-        
+
         tags_result = extract_xml_tags(invoice.xml_content or "")
-        tags_list = [t["tag"] for t in tags_result.get("tags", [])]
-        return {"tags": list(sorted(set(tags_list)))}
+        tags_list = [
+            t["tag"] for t in tags_result.get("tags", [])
+        ] if isinstance(tags_result.get("tags"), list) else (
+            tags_result.get("known_tags", []) + 
+            tags_result.get("unknown_tags", [])
+        )
+        
+        # Handle both object and string formats
+        clean_tags = []
+        for t in tags_list:
+            if isinstance(t, dict):
+                clean_tags.append(t.get("tag") or t.get("name", ""))
+            else:
+                clean_tags.append(str(t))
+
+        return {"tags": sorted(set(clean_tags))}
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get result tags: {str(e)[:100]}")
-        raise HTTPException(status_code=500, detail="Failed to get result tags")
+        logger.error(f"Failed to get tags: {str(e)[:100]}")
+        raise HTTPException(status_code=500,
+            detail="Failed to get result tags")
 
 
-@app.get("/api/results/{id}/rules")
-async def get_result_rules(id: int, db: AsyncSession = Depends(get_db)):
-    """Return all rules and their validation statuses evaluated during the same validation run as result ID."""
+@app.get("/api/results/{invoice_id}/rules")
+async def get_result_rules(invoice_id: int,
+    db: AsyncSession = Depends(get_db)):
+    """Return all rules and their validation statuses for an invoice."""
     try:
-        # Get ValidationResult by ID to find the validation run (invoice_id)
-        val_result = (
-            await db.execute(select(ValidationResultORM).where(ValidationResultORM.id == id))
-        ).scalars().first()
-        if not val_result:
-            raise HTTPException(status_code=404, detail="Validation result not found")
-        
-        invoice_id = val_result.invoice_id
+        # Query ValidationResultORM by invoice_id directly
         results = (
             await db.execute(
-                select(ValidationResultORM).where(ValidationResultORM.invoice_id == invoice_id)
+                select(ValidationResultORM).where(
+                    ValidationResultORM.invoice_id == invoice_id
+                )
             )
         ).scalars().all()
-        
-        rules_list = []
-        for r in results:
-            rules_list.append({
-                "rule_name": r.rule_text,
+
+        if not results:
+            return {"rules": []}
+
+        rules_list = [
+            {
+                "rule_name": r.rule_text or "Unnamed rule",
                 "status": "PASS" if r.status == "PASS" else "FAIL"
-            })
+            }
+            for r in results
+        ]
         return {"rules": rules_list}
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get result rules: {str(e)[:100]}")
-        raise HTTPException(status_code=500, detail="Failed to get result rules")
+        logger.error(f"Failed to get rules: {str(e)[:100]}")
+        raise HTTPException(status_code=500,
+            detail="Failed to get result rules")
 
 
 @app.get("/api/xslt-files/{id:path}/details")
@@ -2498,3 +2683,34 @@ async def resolve_tag_endpoint(body: dict):
 
     TAG_REGISTRY[raw_tag] = canonical if canonical else None
     return {"registered": True, "raw_tag": raw_tag, "canonical_field": canonical}
+
+
+@app.post("/reset-database")
+async def reset_database_endpoint(db: AsyncSession = Depends(get_db)):
+    """Truncate tables and clear storage bucket. No auto-seeding."""
+    from sqlalchemy import text
+    try:
+        # Truncate all tables
+        await db.execute(text("TRUNCATE TABLE rules, invoices, validation_results, validation_logic, file_validation_reports, samples, xslt_sample_links, active_workspace, xslt_files CASCADE;"))
+        await db.commit()
+
+        try:
+            files = supabase.storage.from_("xslt-files").list()
+            if files:
+                file_names = []
+                for f in files:
+                    fname = f.get("name") if isinstance(f, dict) else getattr(f, "name", None)
+                    if fname:
+                        file_names.append(fname)
+                if file_names:
+                    supabase.storage.from_("xslt-files").remove(file_names)
+        except Exception as store_err:
+            logger.warning(f"Failed to clear storage bucket during reset: {store_err}")
+
+        return {"status": "success", "message": "Database truncated and storage cleared."}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Reset database failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset database: {str(e)}")
+
+

@@ -2,10 +2,57 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import { resetDatabase } from "../../lib/api-client";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleGetStarted = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // Clear localStorage and sessionStorage workspace keys
+      if (typeof window !== "undefined") {
+        const workspaceKeys = [
+          "sample_id",
+          "xslt_id",
+          "sample_filename",
+          "xslt_filename",
+          "extracted_tags",
+          "activeSession",
+          "astro-dashboard-setup-config",
+          "astro-active-xslt-workspace",
+          "astro-dashboard-setup-complete",
+        ];
+        workspaceKeys.forEach((key) => {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        });
+      }
+      
+      // Call backend to clear active_workspace
+      try {
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "https://astros.onrender.com"}/api/workspace/active`,
+          { method: "DELETE" }
+        );
+      } catch (err) {
+        console.warn("Failed to clear backend workspace (optional):", err);
+      }
+      
+      router.push("/dashboard");
+    } catch (err) {
+      console.error("Failed to clear session:", err);
+      router.push("/dashboard");
+    } finally {
+      setLoading(false);
+      setOpen(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40">
@@ -26,7 +73,9 @@ export default function Navbar() {
             </nav>
 
             <div className="hidden md:flex items-center gap-4">
-              <Link href="/dashboard" className="px-4 py-2 rounded-md bg-buttonBlue text-buttonText  transition">Get Started</Link>
+              <button onClick={handleGetStarted} disabled={loading} className="px-4 py-2 rounded-md bg-buttonBlue text-buttonText transition disabled:opacity-50">
+                {loading ? "Starting..." : "Get Started"}
+              </button>
             </div>
 
             <div className="md:hidden">
@@ -44,7 +93,9 @@ export default function Navbar() {
               <Link href="#use-cases" onClick={() => setOpen(false)} className="py-2">Use Cases</Link>
               <Link href="#pricing" onClick={() => setOpen(false)} className="py-2">Pricing</Link>
               <Link href="#docs" onClick={() => setOpen(false)} className="py-2">Docs</Link>
-              <Link href="/dashboard" onClick={() => setOpen(false)} className="mt-2 py-2 rounded-md bg-buttonBlue text-buttonText text-center">Get Started</Link>
+              <button onClick={handleGetStarted} disabled={loading} className="mt-2 py-2 rounded-md bg-buttonBlue text-buttonText text-center disabled:opacity-50">
+                {loading ? "Starting..." : "Get Started"}
+              </button>
             </div>
           </div>
         )}
@@ -52,3 +103,4 @@ export default function Navbar() {
     </header>
   );
 }
+

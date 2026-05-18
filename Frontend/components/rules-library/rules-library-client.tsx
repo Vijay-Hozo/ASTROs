@@ -8,7 +8,6 @@ import StatsCards from "./stats-cards";
 import { ErrorAlert } from "../ui/error-alert";
 import { useApiData } from "../../lib/hooks";
 import type { Rule } from "../../lib/types";
-import ActiveXsltBanner from "@/components/workspace/active-xslt-banner";
 
 export default function RulesLibraryClient() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -31,8 +30,6 @@ export default function RulesLibraryClient() {
 
         <main className="p-4 md:p-6">
           <div className="mx-auto max-w-[1400px] space-y-6">
-            <ActiveXsltBanner compact />
-
             <StatsCards />
 
             {error && <ErrorAlert error={error} onRetry={() => setRefreshTrigger((t) => t + 1)} />}

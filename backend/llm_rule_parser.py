@@ -427,6 +427,92 @@ def parse_rule_with_llm(rule_text: str) -> dict:
         )
 
 
+# ─── Number Word Normalizer ──────────────────────────────────────────────────
+
+NUMBER_WORDS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
+    "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+    "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16,
+    "seventeen": 17, "eighteen": 18, "nineteen": 19,
+    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+    "hundred": 100, "thousand": 1000, "lakh": 100000,
+    "lac": 100000, "million": 1000000, "crore": 10000000
+}
+
+
+def normalize_number_words(text: str) -> str:
+    """
+    Convert English number word expressions to integers.
+    Examples:
+      "three thousand"        → "3000"
+      "one lakh"              → "100000"
+      "twenty five thousand"  → "25000"
+      "five hundred"          → "500"
+      "two crore"             → "20000000"
+    """
+    tokens = text.lower().split()
+    result_tokens = []
+    i = 0
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        # Check if current token is a number word
+        if token in NUMBER_WORDS:
+            # Try to build a compound number
+            # e.g. "three thousand five hundred"
+            value = 0
+            current = 0
+
+            while i < len(tokens) and tokens[i] in NUMBER_WORDS:
+                word_val = NUMBER_WORDS[tokens[i]]
+
+                if word_val == 100:
+                    # "hundred" multiplies current
+                    current = (current or 1) * 100
+                elif word_val >= 1000:
+                    # "thousand", "lakh", "million", "crore"
+                    # multiplies (current + value so far at lower scale)
+                    current = (current or 1) * word_val
+                    value += current
+                    current = 0
+                else:
+                    current += word_val
+                i += 1
+
+            value += current
+            result_tokens.append(str(int(value)))
+        else:
+            result_tokens.append(tokens[i])
+            i += 1
+
+    normalized = " ".join(result_tokens)
+    return normalized
+
+
+def preprocess_rule_text(rule_text: str) -> str:
+    """
+    Full preprocessing before sending to LLM.
+    1. Normalize number words to integers
+    2. Normalize percent words
+    """
+    text = normalize_number_words(rule_text)
+
+    # Also handle "X percent" → "X%"
+    text = re.sub(
+        r'(\d+)\s+percent',
+        r'\1%',
+        text,
+        flags=re.IGNORECASE
+    )
+
+    return text
+
+
+# ─── Rule Parser ──────────────────────────────────────────────────────────────
+
 def parse_rule(rule_text: str) -> dict:
     result = _parse_and_build_xslt(rule_text)
     return result["structured"]

@@ -17,6 +17,7 @@ import {
   Play,
   Sparkles,
   ShieldCheck,
+  Shuffle,
   TriangleAlert,
   Upload,
   X,
@@ -51,7 +52,6 @@ export default function DashboardShell() {
     xslt_id: null,
     xslt_filename: null,
     extracted_tags: [],
-    status: "default",
   });
 
   // --- Strict Local State as requested ---
@@ -62,14 +62,12 @@ export default function DashboardShell() {
   const [validationResults, setValidationResults] = useState<any[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
-  const [setupSampleFile, setSetupSampleFile] = useState<File | null>(null);
 
   const [parseLoading, setParseLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [severity, setSeverity] = useState<"low" | "medium" | "high">("high");
-  const [progressText, setProgressText] = useState("");
   const [randomPreviewIndex, setRandomPreviewIndex] = useState(0);
   const [previewXmlContent, setPreviewXmlContent] = useState("");
   const [copiedIndex, setCopiedIndex] = useState(false);
@@ -78,6 +76,7 @@ export default function DashboardShell() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const ruleTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const isValidatingRef = useRef(false);
   const {
     activeXSLTFile,
     activeXSLTFileId,
@@ -110,9 +109,9 @@ export default function DashboardShell() {
     }
   }, [previewFile]);
 
-  // Auto-dismiss toast notifications
+  // Auto-dismiss toast notifications (except during validation)
   useEffect(() => {
-    if (toast) {
+    if (toast && !isValidatingRef.current) {
       const timer = setTimeout(() => setToast(null), 4000);
       return () => clearTimeout(timer);
     }
@@ -122,6 +121,23 @@ export default function DashboardShell() {
   useEffect(() => {
     const restoreSession = async () => {
       try {
+        // Check localStorage first
+        const storedSession = localStorage.getItem("activeSession");
+        if (storedSession) {
+          try {
+            const parsed = JSON.parse(storedSession);
+            setActiveSession(parsed);
+            if (parsed.sample_id) setCurrentSampleId(parsed.sample_id);
+            if (parsed.sample_filename) setCurrentSampleFilename(parsed.sample_filename);
+            if (parsed.xslt_id) setCurrentXsltFilename(parsed.xslt_filename);
+            return;
+          } catch (e) {
+            console.warn("Failed to parse stored session", e);
+            localStorage.removeItem("activeSession");
+          }
+        }
+
+        // Fetch from backend if not in localStorage
         const data = await apiClient.get<ActiveWorkspaceSession>("/api/workspace/active");
         setActiveSession(data);
         if (data.sample_id) setCurrentSampleId(data.sample_id);
@@ -129,17 +145,28 @@ export default function DashboardShell() {
         if (data.xslt_id) {
           setCurrentXsltFilename(data.xslt_filename);
         }
+        
+        // Persist to localStorage
+        if (data.sample_id && data.xslt_id) {
+          localStorage.setItem("activeSession", JSON.stringify(data));
+        }
+        
+        // If no workspace is active, show setup modal
+        if (!data.sample_id || !data.xslt_id) {
+          setShowSetupModal(true);
+        }
       } catch (err: any) {
         console.warn("Failed to restore active workspace session (using defaults):", err?.message || err);
-        // Keep using the default empty session state if fetch fails
+        // Show setup modal if we can't fetch workspace
+        setShowSetupModal(true);
       }
     };
     restoreSession();
   }, []);
 
-  const selectedSampleXmlName = currentSampleFilename || activeSession.sample_filename || "No sample XML selected";
-  const selectedXsltName = activeXSLTFile?.name || currentXsltFilename || activeSession.xslt_filename || "No XSLT file selected";
-  const validatedAgainstName = activeXSLTFile?.name || currentXsltFilename || activeSession.xslt_filename || "No XSLT file selected";
+  const selectedSampleXmlName = activeSession.sample_filename || "No sample XML selected";
+  const selectedXsltName = activeSession.xslt_filename || "No XSLT file selected";
+  const validatedAgainstName = activeSession.xslt_filename || "No XSLT file selected";
 
   // Parse XML Helper for Preview Card
   const parsedPreviewData = useMemo(() => {
@@ -377,9 +404,12 @@ export default function DashboardShell() {
   };
 
   const handleTagClick = (tag: string) => {
+    const tagName = typeof tag === "string" 
+      ? tag 
+      : (tag as any)?.tag || ""
     setRuleText((prev) => {
-      if (!prev) return tag + " ";
-      return prev.endsWith(" ") ? prev + tag + " " : prev + " " + tag + " ";
+      if (!prev) return tagName + " ";
+      return prev.endsWith(" ") ? prev + tagName + " " : prev + " " + tagName + " ";
     });
     setTimeout(() => {
       if (ruleTextareaRef.current) {
@@ -413,14 +443,14 @@ export default function DashboardShell() {
       type: "success",
     });
     
-    // Set initial preview file
-    if (filesArray.length > 1) {
-      const randIdx = Math.floor(Math.random() * filesArray.length);
+    // Set initial preview file from non-empty files
+    if (nonEmptyFiles.length > 1) {
+      const randIdx = Math.floor(Math.random() * nonEmptyFiles.length);
       setRandomPreviewIndex(randIdx);
-      setPreviewFile(filesArray[randIdx]);
-    } else {
+      setPreviewFile(nonEmptyFiles[randIdx]);
+    } else if (nonEmptyFiles.length === 1) {
       setRandomPreviewIndex(0);
-      setPreviewFile(filesArray[0]);
+      setPreviewFile(nonEmptyFiles[0]);
     }
   };
 
@@ -499,15 +529,23 @@ export default function DashboardShell() {
       return;
     }
     setIsValidating(true);
+    isValidatingRef.current = true;
     setValidationResults([]);
     setExpandedFiles({});
     let skippedEmptyFiles = 0;
     let validatedFiles = 0;
     
     try {
+      const totalFiles = uploadedFiles.length;
+      
       for (let i = 0; i < uploadedFiles.length; i++) {
         const file = uploadedFiles[i];
-        setProgressText(`Validating ${i + 1} of ${uploadedFiles.length}...`);
+        
+        // Update single persistent toast — same toast, updated message
+        setToast({
+          message: `Validating ${i + 1} of ${totalFiles}: ${file.name}`,
+          type: "success"
+        });
         
         const xmlText = await file.text();
         if (!xmlText.trim()) {
@@ -516,10 +554,12 @@ export default function DashboardShell() {
         }
 
         validatedFiles += 1;
-        const response = await apiClient.post<any>("/validate/workspace", {
+        const response = await apiClient.post<any>("/api/validate-and-store", {
           xml_content: xmlText,
           xslt_content: activeXSLTContent,
-          xslt_name: activeXSLTFile.name,
+          xslt_name: activeSession.xslt_filename || activeXSLTFile?.name || "",
+          filename: file.name,
+          xslt_id: activeSession.xslt_id
         });
 
         const newResult = {
@@ -534,30 +574,43 @@ export default function DashboardShell() {
           setExpandedFiles((prev) => ({ ...prev, [file.name]: true }));
         }
       }
+
+      // Final toast on completion
+      setToast({
+        message: `${totalFiles} file${totalFiles > 1 ? 's' : ''} validated successfully`,
+        type: "success"
+      });
+
       refetchStats();
 
       if (skippedEmptyFiles > 0) {
-        setToast({
-          message:
-            validatedFiles > 0
-              ? `Validated ${validatedFiles} file${validatedFiles === 1 ? "" : "s"}; skipped ${skippedEmptyFiles} empty file${skippedEmptyFiles === 1 ? "" : "s"}`
-              : "No non-empty XML files were found to validate.",
-          type: validatedFiles > 0 ? "success" : "error",
-        });
+        // This will auto-dismiss after 4 seconds since validation is done
+        setTimeout(() => {
+          setToast({
+            message:
+              validatedFiles > 0
+                ? `Validated ${validatedFiles} file${validatedFiles === 1 ? "" : "s"}; skipped ${skippedEmptyFiles} empty file${skippedEmptyFiles === 1 ? "" : "s"}`
+                : "No non-empty XML files were found to validate.",
+            type: validatedFiles > 0 ? "success" : "error",
+          });
+        }, 3000);
       }
       
       // Clean UI reset once upload + validation completes successfully
-      setUploadedFiles(null);
-      setPreviewFile(null);
-      setValidationResults([]);
-      setExpandedFiles({});
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setTimeout(() => {
+        setUploadedFiles(null);
+        setPreviewFile(null);
+        setValidationResults([]);
+        setExpandedFiles({});
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }, 3100);
       
     } catch (err) {
       console.error("Bulk validation failed:", err);
+      setToast({ message: "Validation failed. Please try again.", type: "error" });
     } finally {
+      isValidatingRef.current = false;
       setIsValidating(false);
-      setProgressText("");
     }
   };
 
@@ -578,38 +631,33 @@ export default function DashboardShell() {
     // 1. Set extracted_tags = [] immediately (clears old chips from UI)
     setActiveSession((prev) => ({ ...prev, extracted_tags: [] }));
 
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        "astro-dashboard-setup-config",
-        JSON.stringify({
-          xmlFileName: payload.xmlFile?.name ?? null,
-          xsltMode: payload.xsltSelection.mode,
-          xsltFileId: payload.xsltSelection.file?.id ?? null,
-          xsltName: payload.xsltSelection.file?.name ?? payload.xsltSelection.draft?.name ?? null,
-        }),
-      );
-    }
-    setShowSetupModal(false);
-
-    // 2. Call PUT /api/workspace/active
+    // 2. Call PUT /api/workspace/active with sample and XSLT IDs
     try {
+      // Extract DB id explicitly — xsltSelection.file.id is now the DB row id from backend
+      const xsltDbId = payload.xsltSelection.file?.id ?? null;
+      
       const freshData = await apiClient.put<ActiveWorkspaceSession>("/api/workspace/active", {
         sample_id: payload.sampleId,
-        xslt_id: payload.xsltSelection.file?.id ?? null,
-        xslt_filename: payload.xsltSelection.file?.name ?? payload.xsltSelection.draft?.name ?? null,
+        xslt_id: xsltDbId,
       });
+      
       // 3. On response, set full activeSession with new data
       setActiveSession(freshData);
       setCurrentSampleId(freshData.sample_id);
       setCurrentSampleFilename(freshData.sample_filename);
       setCurrentXsltFilename(freshData.xslt_filename);
+      
+      // 4. Persist to localStorage
+      localStorage.setItem("activeSession", JSON.stringify(freshData));
+      
+      setToast({ message: "Workspace setup completed", type: "success" });
     } catch (err) {
       console.error("Failed to update active workspace session:", err);
+      setToast({ message: "Failed to save workspace", type: "error" });
     }
 
-    setToast({ message: "Workspace setup completed", type: "success" });
-    setSetupSampleFile(payload.xmlFile ?? null);
-    if (payload.xmlFile) setPreviewFile(payload.xmlFile);
+    // Close modal after handling
+    setShowSetupModal(false);
     await setActiveXSLTSelection(payload.xsltSelection);
   };
 
@@ -637,23 +685,13 @@ export default function DashboardShell() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Selected Sample XML</p>
                     <div className="mt-1 flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-slate-900">{selectedSampleXmlName}</p>
-                      {activeSession.status === "default" && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                          default
-                        </span>
-                      )}
+                      <p className={`truncate text-sm font-semibold ${selectedSampleXmlName === "No sample XML selected" ? "text-slate-400" : "text-slate-900"}`}>{selectedSampleXmlName}</p>
                     </div>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Selected XSLT File</p>
                     <div className="mt-1 flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-slate-900">{selectedXsltName}</p>
-                      {activeSession.status === "default" && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                          default
-                        </span>
-                      )}
+                      <p className={`truncate text-sm font-semibold ${selectedXsltName === "No XSLT file selected" ? "text-slate-400" : "text-slate-900"}`}>{selectedXsltName}</p>
                     </div>
                   </div>
                 </div>
@@ -747,20 +785,13 @@ export default function DashboardShell() {
                       </div>
                     </div>
 
-                    {/* Progress Indicator */}
+                    {/* Validation Status Indicator */}
                     <div className="mt-4 pt-3 border-t border-slate-100">
-                      {isValidating ? (
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center mb-3 animate-pulse">
-                          <span className="text-sm font-bold text-indigo-700 block">{progressText}</span>
-                          <span className="text-xs text-indigo-500">Executing sequential pipeline parser...</span>
+                      {validationResults.length > 0 && (
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center mb-3 flex items-center justify-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          <span className="text-xs font-bold text-emerald-800">Sequential Validation Complete!</span>
                         </div>
-                      ) : (
-                        validationResults.length > 0 && (
-                          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center mb-3 flex items-center justify-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                            <span className="text-xs font-bold text-emerald-800">Sequential Validation Complete!</span>
-                          </div>
-                        )
                       )}
 
                       <button
@@ -865,18 +896,23 @@ export default function DashboardShell() {
                           Extracted Invoice Tags (Click to insert)
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {activeSession.extracted_tags.map(tag => (
-                            <button
-                              key={tag}
-                              type="button"
-                              onClick={() => handleTagClick(tag)}
-                              className="px-2.5 py-1 text-xs rounded-lg bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 font-mono transition shadow-sm hover:shadow active:scale-95 flex items-center gap-1 cursor-pointer"
-                              title={`Insert ${tag} into rule`}
-                            >
-                              <span>{tag}</span>
-                              <Plus className="h-3 w-3 opacity-60" />
-                            </button>
-                          ))}
+                          {activeSession.extracted_tags.map((tag, index) => {
+                            const tagName = typeof tag === "string" 
+                              ? tag 
+                              : tag?.tag || tag?.name || String(index)
+                            return (
+                              <button
+                                key={`${tagName}-${index}`}
+                                type="button"
+                                onClick={() => handleTagClick(tagName)}
+                                className="px-2.5 py-1 text-xs rounded-lg bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 font-mono transition shadow-sm hover:shadow active:scale-95 flex items-center gap-1 cursor-pointer"
+                                title={`Insert ${tagName} into rule`}
+                              >
+                                <span>{tagName}</span>
+                                <Plus className="h-3 w-3 opacity-60" />
+                              </button>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
@@ -1092,13 +1128,15 @@ export default function DashboardShell() {
                 {uploadedFiles && uploadedFiles.length > 1 && (
                   <div className="flex items-center gap-2.5">
                     <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-3 py-1">
-                      Previewing {randomPreviewIndex + 1} of {uploadedFiles.length} uploaded files
+                      Previewing {randomPreviewIndex + 1} of {uploadedFiles.length} files
                     </span>
                     <button
                       onClick={handleShowAnother}
-                      className="text-xs font-bold text-slate-700 hover:text-indigo-600 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg transition"
+                      disabled={!uploadedFiles || uploadedFiles.length <= 1}
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-indigo-600 transition disabled:opacity-30"
+                      title="Show another random file"
                     >
-                      Show another
+                      <Shuffle className="h-4 w-4" />
                     </button>
                   </div>
                 )}
@@ -1108,7 +1146,7 @@ export default function DashboardShell() {
                 // Empty state
                 <div className="py-10 text-center border border-dashed border-slate-100 rounded-xl">
                   <FileCode2 className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-500">Upload an XML to preview</p>
+                  <p className="text-sm font-semibold text-slate-500">Upload invoice XML files above to preview metadata</p>
                 </div>
               ) : (
                 // Loaded preview details
