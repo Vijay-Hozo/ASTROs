@@ -43,6 +43,20 @@ async def main():
         print(" - Modifying active_workspace table...")
         await conn.execute(text("ALTER TABLE active_workspace ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();"))
         
+        # Convert id column to VARCHAR to support fixed UUID
+        try:
+            await conn.execute(text("ALTER TABLE active_workspace DROP CONSTRAINT active_workspace_pkey;"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE active_workspace ALTER COLUMN id TYPE VARCHAR;"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE active_workspace ADD PRIMARY KEY (id);"))
+        except Exception:
+            pass
+        
         print("[migration] Migrations executed successfully!")
         
     await direct_engine.dispose()

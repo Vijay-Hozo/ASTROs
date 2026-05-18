@@ -118,20 +118,6 @@ export default function SetupModal({
         throw new Error("Please select or create an XSLT file first");
       }
 
-      // 3. Link sample to XSLT
-      const linkRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://astros.onrender.com'}/api/link`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sample_id: finalSampleId,
-          xslt_id: xsltSelection.file.id,
-        }),
-      });
-
-      if (!linkRes.ok) {
-        throw new Error("Failed to link sample to XSLT");
-      }
-
       if (!skipMarkSetupComplete) {
         markSetupComplete();
       }

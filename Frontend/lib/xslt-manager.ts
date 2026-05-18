@@ -147,28 +147,30 @@ async function parseWorkspaceRules(ruleTexts: string[]): Promise<ParseRuleRespon
 
 export async function listXsltFiles(): Promise<XsltStorageFile[]> {
   try {
-    const supabase = createClient();
-    const { data, error } = await supabase.storage.from(BUCKET_NAME).list('', {
-      limit: 100,
-      offset: 0,
-      sortBy: { column: 'name', order: 'asc' }
-    });
+    // Fetch from backend database endpoint
+    const files = await apiClient.get<Array<{
+      id: string;
+      filename: string;
+      description?: string;
+      rules_count: number;
+      created_at?: string;
+    }>>("/api/xslt-files");
     
-    if (error) {
-      console.warn('Storage list error:', error.message);
+    if (!Array.isArray(files)) {
       return [];
     }
-
-    const xsltItems = (data ?? []).filter((item) => item.name.endsWith(".xslt"));
-    const records = await Promise.all(
-      xsltItems.map(async (item) => {
-        const id = item.name.replace(/\.xslt$/, "");
-        const metadata = await readMetadata(id);
-        return toFileRecord(id, metadata);
-      }),
-    );
-
-    return records.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+    
+    // Convert DB records to XsltStorageFile format
+    return files.map((f) => ({
+      id: f.id,
+      name: f.filename,
+      description: f.description,
+      created_at: f.created_at || new Date().toISOString(),
+      updated_at: f.created_at || new Date().toISOString(),
+      rule_count: f.rules_count,
+      documentPath: `${f.id}.xslt`,
+      metadataPath: `${f.id}.json`,
+    })).sort((left, right) => right.updated_at.localeCompare(left.updated_at));
   } catch (err) {
     console.warn('Failed to list XSLT files:', err instanceof Error ? err.message : err);
     return [];
@@ -234,6 +236,18 @@ export async function createXsltFile(draft: XsltFileDraft): Promise<XsltStorageF
 
     if (documentResult.error) throw documentResult.error;
     if (metadataResult.error) throw metadataResult.error;
+
+    // Also register in database
+    try {
+      await apiClient.post("/api/xslt-files", {
+        id: id,
+        filename: draft.name,
+        description: draft.description ?? "",
+      });
+    } catch (dbErr) {
+      console.warn("Failed to register XSLT file in database:", dbErr instanceof Error ? dbErr.message : dbErr);
+      // Don't fail completely - file was created in storage
+    }
 
     return record;
   } catch (err) {

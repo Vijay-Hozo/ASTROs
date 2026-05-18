@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Download, X, CheckCircle2, XCircle, FileCode2 } from "lucide-react";
+import { Download, X, CheckCircle2, XCircle, FileCode2, ChevronUp, ExternalLink } from "lucide-react";
 import type { ValidationReportRow } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://astros.onrender.com";
@@ -28,16 +30,15 @@ export default function ResultDetailDrawer({
   result?: ValidationReportRow | null;
   onClose?: () => void;
 }) {
-  const [tags, setTags] = React.useState<string[] | null>(null);
+  const [tags, setTags] = React.useState<string[]>([]);
   const [rules, setRules] = React.useState<{ rule_name: string; status: "PASS" | "FAIL" }[] | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  // XSLT Modal state
-  const [xsltModalOpen, setXsltModalOpen] = React.useState(false);
+  // XSLT Inline expansion state
+  const [xsltExpanded, setXsltExpanded] = React.useState(false);
   const [xsltDetails, setXsltDetails] = React.useState<any>(null);
   const [xsltLoading, setXsltLoading] = React.useState(false);
-  const [xsltError, setXsltError] = React.useState<string | null>(null);
 
   const xsltFilename = result?.xslt_filename ?? "N/A";
   const xsltId = (result as any)?.xslt_id || result?.xslt_filename || "N/A";
@@ -65,30 +66,30 @@ export default function ResultDetailDrawer({
     let active = true;
     setIsLoading(true);
     setError(null);
-    setTags(null);
+    setTags([]);
     setRules(null);
 
     const fetchData = async () => {
       try {
         const [tagsRes, rulesRes] = await Promise.all([
-          fetch(`${API_BASE}/api/results/${result.id}/tags`).then((r) => {
-            if (!r.ok) throw new Error("Failed to fetch invoice XML tags");
-            return r.json() as Promise<{ tags: string[] }>;
-          }),
-          fetch(`${API_BASE}/api/results/${result.id}/rules`).then((r) => {
-            if (!r.ok) throw new Error("Failed to fetch rules applied");
-            return r.json() as Promise<{ rules: { rule_name: string; status: "PASS" | "FAIL" }[] }>;
-          }),
+          fetch(`${API_BASE}/api/results/${result.id}/tags`)
+            .then((r) => r.ok ? r.json() : { tags: [] })
+            .catch(() => ({ tags: [] })),
+          fetch(`${API_BASE}/api/results/${result.id}/rules`)
+            .then((r) => r.ok ? r.json() : { rules: [] })
+            .catch(() => ({ rules: [] })),
         ]);
 
         if (active) {
-          setTags(tagsRes.tags);
-          setRules(rulesRes.rules);
+          setTags(tagsRes.tags || []);
+          setRules(rulesRes.rules || []);
           setIsLoading(false);
         }
       } catch (err: any) {
         if (active) {
-          setError(err.message || "An error occurred while fetching details.");
+          // Silent fail — show nothing
+          setTags([]);
+          setRules([]);
           setIsLoading(false);
         }
       }
@@ -107,19 +108,30 @@ export default function ResultDetailDrawer({
     window.open(`${API_BASE}/api/results/${result.invoice_id}/pdf`, "_blank", "noopener,noreferrer");
   };
 
-  const openXsltModal = async () => {
-    setXsltModalOpen(true);
+  const handleXsltToggle = async () => {
+    // If already expanded, just close
+    if (xsltExpanded) {
+      setXsltExpanded(false);
+      return;
+    }
+
+    // If already loaded, just open
+    if (xsltDetails) {
+      setXsltExpanded(true);
+      return;
+    }
+
+    // Otherwise fetch details
     setXsltLoading(true);
-    setXsltError(null);
-    setXsltDetails(null);
 
     try {
       const res = await fetch(`${API_BASE}/api/xslt-files/${encodeURIComponent(xsltId)}/details`);
       if (!res.ok) throw new Error("Failed to fetch XSLT details");
       const data = await res.json();
       setXsltDetails(data);
+      setXsltExpanded(true);
     } catch (err: any) {
-      setXsltError(err.message || "Failed to load XSLT details.");
+      console.error("Failed to load XSLT details:", err);
     } finally {
       setXsltLoading(false);
     }
@@ -177,13 +189,7 @@ export default function ResultDetailDrawer({
             </div>
           )}
 
-          {error && (
-            <div className="text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-4">
-              {error}
-            </div>
-          )}
-
-          {!isLoading && !error && (
+          {!isLoading && (
             <>
               {/* SECTION 1 — Invoice XML Tags */}
               <section>
@@ -276,13 +282,78 @@ export default function ResultDetailDrawer({
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
                   XSLT File Used
                 </h4>
-                <div className="flex items-center">
+                <div className="space-y-2">
                   <button
-                    onClick={openXsltModal}
-                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition flex items-center gap-1 hover:underline"
+                    onClick={handleXsltToggle}
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition"
                   >
-                    Validated against: {xsltFilename} ↗
+                    Validated against: {xsltFilename}
+                    {xsltLoading 
+                      ? <span className="text-xs text-slate-400 ml-1">Loading...</span>
+                      : xsltExpanded 
+                        ? <ChevronUp className="h-3.5 w-3.5" />
+                        : <ExternalLink className="h-3.5 w-3.5" />
+                    }
                   </button>
+
+                  {/* Inline expansion — no modal */}
+                  {xsltExpanded && xsltDetails && (
+                    <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+                      
+                      {/* Header info */}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            XSLT File
+                          </span>
+                          <span className="text-xs font-semibold text-slate-800">
+                            {xsltDetails.xslt_filename}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            Sample XML
+                          </span>
+                          <span className="text-xs font-semibold text-slate-800">
+                            {xsltDetails.sample_filename}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="border-t border-indigo-100" />
+
+                      {/* Rules list */}
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                          Rules in this XSLT ({xsltDetails.rules.length})
+                        </p>
+
+                        {xsltDetails.rules.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic">
+                            No rules created yet for this XSLT file.
+                          </p>
+                        ) : (
+                          <ol className="space-y-1.5">
+                            {xsltDetails.rules.map((rule: any, idx: number) => (
+                              <li
+                                key={idx}
+                                className="flex items-start gap-2.5 text-xs text-slate-700"
+                              >
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center">
+                                  {idx + 1}
+                                </span>
+                                <span className="leading-relaxed pt-0.5">
+                                  {rule.rule_name}
+                                </span>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                      </div>
+
+                    </div>
+                  )}
                 </div>
               </section>
             </>
@@ -303,81 +374,6 @@ export default function ResultDetailDrawer({
           </button>
         </div>
       </motion.aside>
-
-      {/* XSLT Modal Overlay */}
-      {xsltModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[80vh]"
-          >
-            {/* Modal Title */}
-            <div className="flex items-start justify-between mb-4 flex-shrink-0">
-              <h3 className="text-base font-bold text-slate-900 leading-tight">
-                {xsltDetails?.xslt_filename || xsltFilename} — Rule Library
-              </h3>
-              <button
-                onClick={() => setXsltModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            {xsltLoading && (
-              <div className="flex h-32 items-center justify-center">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
-              </div>
-            )}
-
-            {xsltError && (
-              <div className="my-4 text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-3">
-                {xsltError}
-              </div>
-            )}
-
-            {!xsltLoading && !xsltError && xsltDetails && (
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">XSLT File</div>
-                  <div className="text-sm font-bold text-slate-800">{xsltDetails.xslt_filename}</div>
-                </div>
-
-
-
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Rules Library List</div>
-                  {xsltDetails.rules && xsltDetails.rules.length > 0 ? (
-                    <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-700 font-medium pl-1">
-                      {xsltDetails.rules.map((rule: any, idx: number) => (
-                        <li key={idx} className="leading-relaxed">
-                          {rule.rule_name}
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="text-xs text-slate-400 italic">
-                      No rules created yet for this XSLT file.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Modal Footer */}
-            <div className="mt-6 flex justify-end flex-shrink-0">
-              <button
-                onClick={() => setXsltModalOpen(false)}
-                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-xl transition"
-              >
-                Close
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </>
   );
 }

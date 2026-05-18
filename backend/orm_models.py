@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from sqlalchemy import ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 
@@ -133,6 +134,8 @@ class Sample(Base):
     filename: Mapped[str]
     xml_content: Mapped[str]
     tags_json: Mapped[str] = mapped_column(default="{}")
+    status: Mapped[Optional[str]] = mapped_column(default="default")
+    extracted_tags: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
@@ -143,6 +146,7 @@ class XsltSampleLink(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     sample_id: Mapped[int] = mapped_column(ForeignKey("samples.id"))
     xslt_file_id: Mapped[str]  # UUID reference to Supabase Storage XSLT file
+    xslt_id: Mapped[Optional[str]] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
@@ -150,10 +154,11 @@ class ActiveWorkspace(Base):
     __tablename__ = "active_workspace"
     __allow_unmapped__ = True
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default="00000000-0000-0000-0000-000000000001")
     user_id: Mapped[str] = mapped_column(default="default", unique=True)
     sample_id: Mapped[Optional[int]] = mapped_column(ForeignKey("samples.id"), default=None)
     xslt_id: Mapped[Optional[str]] = mapped_column(default=None)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -163,6 +168,11 @@ class XsltFile(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True)
     filename: Mapped[str]
+    status: Mapped[Optional[str]] = mapped_column(default="default")
+    description: Mapped[Optional[str]] = mapped_column(default=None)
+    xslt_content: Mapped[Optional[str]] = mapped_column(default=None)
+    rules_count: Mapped[int] = mapped_column(default=0)
+    rule_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 

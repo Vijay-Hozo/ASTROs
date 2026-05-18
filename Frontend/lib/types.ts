@@ -211,6 +211,7 @@ export interface ValidationReportDetail {
   uploaded_at: string;
   processed_at?: string | null;
   execution_status: string;
+  xslt_filename?: string;
   overall_status: OverallValidationStatus;
   summary: ValidationSummary;
   checklist: ValidationDetailItem[];
@@ -262,7 +263,6 @@ export interface ActiveWorkspaceSession {
   xslt_id: string | null;
   xslt_filename: string | null;
   extracted_tags: string[];
-  status?: string;
 }
 
 // ============================================================================

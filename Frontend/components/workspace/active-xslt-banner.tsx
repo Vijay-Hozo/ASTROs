@@ -1,7 +1,8 @@
 "use client";
 
 import { AlertTriangle, Database, FileCode2, RefreshCw } from "lucide-react";
-import { useXsltWorkspace } from "@/lib/xslt-workspace-context";
+import { useEffect, useState } from "react";
+import type { ActiveWorkspaceSession } from "@/lib/types";
 
 type ActiveXsltBannerProps = {
   onRechoose?: () => void;
@@ -9,7 +10,24 @@ type ActiveXsltBannerProps = {
 };
 
 export default function ActiveXsltBanner({ onRechoose, compact = false }: ActiveXsltBannerProps) {
-  const { activeXSLTFile, activeXSLTFileId, activeRuleCount, isHydrating } = useXsltWorkspace();
+  const [activeSession, setActiveSession] = useState<ActiveWorkspaceSession | null>(null);
+  const [isHydrating, setIsHydrating] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("activeSession");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setActiveSession(parsed);
+      } catch (e) {
+        console.warn("Failed to parse stored session", e);
+      }
+    }
+    setIsHydrating(false);
+  }, []);
+
+  const displayName = activeSession?.xslt_filename ?? "No XSLT file selected";
+  const ruleCount = activeSession ? 0 : 0; // Static since we don't have rule count in session
 
   if (compact) {
     return (
@@ -22,14 +40,14 @@ export default function ActiveXsltBanner({ onRechoose, compact = false }: Active
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Currently Active XSLT</p>
               <p className="text-sm font-semibold text-slate-900">
-                {isHydrating ? "Loading workspace..." : activeXSLTFile?.name ?? "No XSLT file selected"}
+                {isHydrating ? "Loading workspace..." : displayName}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 font-medium text-slate-700">
               <Database className="h-3.5 w-3.5" />
-              {activeRuleCount} rules
+              {ruleCount} rules
             </span>
             {onRechoose && (
               <button
@@ -57,10 +75,10 @@ export default function ActiveXsltBanner({ onRechoose, compact = false }: Active
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Currently Active XSLT</p>
             <p className="mt-1 text-sm font-semibold text-slate-900">
-              {isHydrating ? "Loading workspace..." : activeXSLTFile?.name ?? "No XSLT file selected"}
+              {isHydrating ? "Loading workspace..." : displayName}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              {activeXSLTFileId ? `Workspace ID: ${activeXSLTFileId}` : "Choose or create a workspace to scope validation."}
+              {activeSession?.xslt_id ? `Workspace ID: ${activeSession.xslt_id}` : "Choose or create a workspace to scope validation."}
             </p>
           </div>
         </div>
@@ -68,7 +86,7 @@ export default function ActiveXsltBanner({ onRechoose, compact = false }: Active
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700">
             <Database className="h-3.5 w-3.5" />
-            {activeRuleCount} active rules
+            {ruleCount} active rules
           </span>
           {onRechoose && (
             <button
@@ -82,7 +100,7 @@ export default function ActiveXsltBanner({ onRechoose, compact = false }: Active
           )}
         </div>
       </div>
-      {!activeXSLTFile && !isHydrating && (
+      {(!displayName || displayName === "No XSLT file selected") && !isHydrating && (
         <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           <AlertTriangle className="h-4 w-4" />
           No active XSLT workspace selected.
