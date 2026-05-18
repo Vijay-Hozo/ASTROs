@@ -897,9 +897,9 @@ export default function DashboardShell() {
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {activeSession.extracted_tags.map((tag, index) => {
-                            const tagName = typeof tag === "string" 
-                              ? tag 
-                              : tag?.tag || tag?.name || String(index)
+                            const tagName = typeof tag === "string"
+                              ? tag
+                              : (tag as any)?.tag ?? (tag as any)?.name ?? String(index);
                             return (
                               <button
                                 key={`${tagName}-${index}`}

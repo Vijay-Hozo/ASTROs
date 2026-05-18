@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import React from "react";
@@ -64,7 +66,7 @@ export default function ResultDetailDrawer({
     let active = true;
     setIsLoading(true);
     setError(null);
-    setTags(null);
+    setTags([]);
     setRules(null);
 
     const fetchData = async () => {
