@@ -10,7 +10,7 @@ export default function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }
   const handleExportZip = async () => {
     setIsExporting(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://astros.onrender.com";
       const response = await fetch(`${apiUrl}/api/results/export-zip`);
       if (!response.ok) {
         throw new Error("Failed to export results ZIP");

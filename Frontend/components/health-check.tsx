@@ -15,7 +15,7 @@ export default function HealthCheck() {
     const checkHealth = async () => {
       setHealth({ status: "checking" });
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://astros.onrender.com";
 
       try {
         const response = await fetch(`${apiUrl}/health`, {

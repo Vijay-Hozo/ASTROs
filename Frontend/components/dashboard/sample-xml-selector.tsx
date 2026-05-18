@@ -35,7 +35,7 @@ export default function SampleXmlSelector({ value, selectedSampleId, onChange }:
     setIsLoading(true);
     setError(null);
     try {
-      const data = await apiClient.get("/api/samples");
+      const data = await apiClient.get<SampleXml[]>("/api/samples");
       setSamples(data);
     } catch (err: any) {
       setError(err?.message || "Failed to load samples");

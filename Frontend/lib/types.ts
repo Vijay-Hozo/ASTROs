@@ -256,6 +256,15 @@ export interface DashboardStats {
   recent_validations?: RecentValidation[];
 }
 
+export interface ActiveWorkspaceSession {
+  sample_id: number | null;
+  sample_filename: string | null;
+  xslt_id: string | null;
+  xslt_filename: string | null;
+  extracted_tags: string[];
+  status?: string;
+}
+
 // ============================================================================
 // Validation Requests
 // ============================================================================
